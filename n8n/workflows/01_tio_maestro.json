@@ -7,12 +7,12 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "a1000001-0000-0000-0000-000000000001",
+      "id": "node-001",
       "name": "Webhook Evolution",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [240, 300],
-      "webhookId": "a1000001-0000-0000-0000-000000000099"
+      "webhookId": "tio-maestro-webhook-id"
     },
     {
       "parameters": {
@@ -20,7 +20,7 @@
         "responseBody": "OK",
         "options": {}
       },
-      "id": "a1000001-0000-0000-0000-000000000002",
+      "id": "node-002",
       "name": "Responder 200",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
@@ -29,10 +29,10 @@
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "options": {},
           "conditions": [
             {
-              "id": "cond-frommme",
+              "id": "cond-fromme",
               "leftValue": "={{ $json.body.data.key.fromMe }}",
               "rightValue": true,
               "operator": { "type": "boolean", "operation": "equals" }
@@ -42,7 +42,7 @@
         },
         "options": {}
       },
-      "id": "a1000001-0000-0000-0000-000000000003",
+      "id": "node-003",
       "name": "É mensagem do bot?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -53,34 +53,28 @@
         "assignments": {
           "assignments": [
             {
-              "id": "f1",
+              "id": "a1",
               "name": "telefone",
               "value": "={{ $json.body.data.key.remoteJid.replace('@s.whatsapp.net','').replace('@c.us','') }}",
               "type": "string"
             },
             {
-              "id": "f2",
+              "id": "a2",
               "name": "pushname",
               "value": "={{ $json.body.data.pushName || '' }}",
               "type": "string"
             },
             {
-              "id": "f3",
+              "id": "a3",
               "name": "mensagem",
               "value": "={{ $json.body.data.message?.conversation || $json.body.data.message?.extendedTextMessage?.text || '' }}",
-              "type": "string"
-            },
-            {
-              "id": "f4",
-              "name": "instancia",
-              "value": "={{ $json.body.instance || '' }}",
               "type": "string"
             }
           ]
         },
         "options": {}
       },
-      "id": "a1000001-0000-0000-0000-000000000004",
+      "id": "node-004",
       "name": "Extrair Dados",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
@@ -102,10 +96,10 @@
         "contentType": "raw",
         "rawContentType": "application/json",
         "body": "={{ JSON.stringify({ p_telefone: $json.telefone, p_pushname: $json.pushname }) }}",
-        "options": {}
+        "options": { "response": { "response": { "responseFormat": "text" } } }
       },
-      "id": "a1000001-0000-0000-0000-000000000005",
-      "name": "Atualizar Pushname",
+      "id": "node-005",
+      "name": "Salvar Pushname",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [900, 300]
@@ -128,7 +122,7 @@
         "body": "={{ JSON.stringify({ p_telefone: $('Extrair Dados').item.json.telefone }) }}",
         "options": {}
       },
-      "id": "a1000001-0000-0000-0000-000000000006",
+      "id": "node-006",
       "name": "Buscar Usuário",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -137,10 +131,10 @@
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "options": {},
           "conditions": [
             {
-              "id": "cond-encontrado",
+              "id": "cond-existe",
               "leftValue": "={{ $json.encontrado }}",
               "rightValue": true,
               "operator": { "type": "boolean", "operation": "equals" }
@@ -150,7 +144,7 @@
         },
         "options": {}
       },
-      "id": "a1000001-0000-0000-0000-000000000007",
+      "id": "node-007",
       "name": "Usuário existe?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -166,16 +160,16 @@
         "body": "={{ JSON.stringify({ telefone: $('Extrair Dados').item.json.telefone, pushname: $('Extrair Dados').item.json.pushname, mensagem: $('Extrair Dados').item.json.mensagem }) }}",
         "options": {}
       },
-      "id": "a1000001-0000-0000-0000-000000000008",
+      "id": "node-008",
       "name": "→ Onboarding",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1560, 440]
+      "position": [1560, 460]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "options": {},
           "conditions": [
             {
               "id": "cond-bloqueado",
@@ -188,7 +182,7 @@
         },
         "options": {}
       },
-      "id": "a1000001-0000-0000-0000-000000000009",
+      "id": "node-009",
       "name": "Está bloqueado?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -211,11 +205,11 @@
         "body": "={{ JSON.stringify({ number: $('Extrair Dados').item.json.telefone, text: '⚠️ Sua conta está temporariamente bloqueada.\\nMotivo: ' + $('Buscar Usuário').item.json.motivo_bloqueio + '\\n\\nEntre em contato com o suporte.' }) }}",
         "options": {}
       },
-      "id": "a1000001-0000-0000-0000-000000000010",
+      "id": "node-010",
       "name": "Msg: Conta Bloqueada",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1780, 440]
+      "position": [1780, 460]
     },
     {
       "parameters": {
@@ -235,7 +229,7 @@
         "body": "={{ JSON.stringify({ p_usuario_id: $('Buscar Usuário').item.json.id }) }}",
         "options": {}
       },
-      "id": "a1000001-0000-0000-0000-000000000011",
+      "id": "node-011",
       "name": "Obter Sessão",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -243,35 +237,47 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
-          "conditions": [
-            {
-              "id": "cond-motor",
-              "leftValue": "={{ $json.motor_atual }}",
-              "rightValue": "",
-              "operator": { "type": "string", "operation": "notEquals" }
-            }
-          ],
-          "combinator": "and"
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
         },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 30, system: 'Você é o Maestro do TIO, app de mobilidade e serviços via WhatsApp. Classifique a mensagem do usuário em UM destes motores:\\n- motor_1_corrida: pedir corrida de moto ou carro\\n- motor_1_entrega: fazer uma entrega\\n- motor_2_carona: carona compartilhada / viagem\\n- motor_3_servico: serviços agendados (barbearia, salão, massagem)\\n- motor_4_reparo: reparos em casa (encanador, eletricista, pintor)\\n- motor_5_delivery: pedir comida / delivery\\n- menu_principal: saudação, dúvida geral ou não identificado\\n\\nSe motor_atual da sessão estiver preenchido e a mensagem parecer continuação desse fluxo, retorne o motor_atual.\\n\\nResponda APENAS com o nome do motor, sem mais nada.', messages: [{ role: 'user', content: 'Motor atual da sessão: ' + ($('Obter Sessão').item.json.motor_atual || 'nenhum') + '\\nMensagem: ' + $('Extrair Dados').item.json.mensagem }] }) }}",
         "options": {}
       },
-      "id": "a1000001-0000-0000-0000-000000000012",
-      "name": "Motor em andamento?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
+      "id": "node-012",
+      "name": "IA: Classificar Intenção",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [2000, 300]
     },
     {
       "parameters": {
-        "jsCode": "// Detecta intenção da mensagem e retorna o motor correspondente\nconst msg = $('Extrair Dados').item.json.mensagem.toLowerCase();\n\nlet motor = 'menu_principal';\n\nif (/\\bmoto\\b|\\bcorrida\\b|\\buber\\b|\\b99\\b|\\bindriver\\b/.test(msg)) {\n  motor = 'motor_1_corrida';\n} else if (/\\bentrega\\b|\\bentregar\\b|\\bmotoboy\\b/.test(msg)) {\n  motor = 'motor_1_entrega';\n} else if (/\\bcarona\\b|\\bvou pra\\b|\\bviagem\\b|\\bvou para\\b/.test(msg)) {\n  motor = 'motor_2_carona';\n} else if (/\\bcabelo\\b|\\bbarba\\b|\\bcortar\\b|\\bbarbearia\\b|\\bsal.o\\b|\\bmassagem\\b/.test(msg)) {\n  motor = 'motor_3_servico';\n} else if (/\\bchuveir\\b|\\bvazamento\\b|\\bencanador\\b|\\beletricista\\b|\\breparo\\b|\\bpintor\\b/.test(msg)) {\n  motor = 'motor_4_reparo';\n} else if (/\\bpizza\\b|\\bhamb.rguer\\b|\\bcomida\\b|\\bdelivery\\b|\\bpedido\\b|\\brestaurante\\b|\\blanche\\b/.test(msg)) {\n  motor = 'motor_5_delivery';\n}\n\nreturn [{ json: { motor, mensagem: msg } }];"
+        "assignments": {
+          "assignments": [
+            {
+              "id": "m1",
+              "name": "motor",
+              "value": "={{ $json.content[0].text.trim() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
       },
-      "id": "a1000001-0000-0000-0000-000000000013",
-      "name": "Detectar Intenção",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [2220, 440]
+      "id": "node-013",
+      "name": "Extrair Motor",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [2220, 300]
     },
     {
       "parameters": {
@@ -290,11 +296,11 @@
         "fallbackOutput": "extra",
         "options": {}
       },
-      "id": "a1000001-0000-0000-0000-000000000014",
+      "id": "node-014",
       "name": "Rotear Motor",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
-      "position": [2440, 440]
+      "position": [2440, 300]
     },
     {
       "parameters": {
@@ -306,11 +312,11 @@
         "body": "={{ JSON.stringify({ telefone: $('Extrair Dados').item.json.telefone, usuario: $('Buscar Usuário').item.json, sessao: $('Obter Sessão').item.json, mensagem: $('Extrair Dados').item.json.mensagem }) }}",
         "options": {}
       },
-      "id": "a1000001-0000-0000-0000-000000000015",
+      "id": "node-015",
       "name": "→ Motor 1 Corrida",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2660, 200]
+      "position": [2660, 100]
     },
     {
       "parameters": {
@@ -322,11 +328,11 @@
         "body": "={{ JSON.stringify({ telefone: $('Extrair Dados').item.json.telefone, usuario: $('Buscar Usuário').item.json, sessao: $('Obter Sessão').item.json, mensagem: $('Extrair Dados').item.json.mensagem }) }}",
         "options": {}
       },
-      "id": "a1000001-0000-0000-0000-000000000016",
+      "id": "node-016",
       "name": "→ Motor 1 Entrega",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2660, 320]
+      "position": [2660, 220]
     },
     {
       "parameters": {
@@ -338,11 +344,11 @@
         "body": "={{ JSON.stringify({ telefone: $('Extrair Dados').item.json.telefone, usuario: $('Buscar Usuário').item.json, sessao: $('Obter Sessão').item.json, mensagem: $('Extrair Dados').item.json.mensagem }) }}",
         "options": {}
       },
-      "id": "a1000001-0000-0000-0000-000000000017",
+      "id": "node-017",
       "name": "→ Motor 2 Carona",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2660, 440]
+      "position": [2660, 340]
     },
     {
       "parameters": {
@@ -354,11 +360,11 @@
         "body": "={{ JSON.stringify({ telefone: $('Extrair Dados').item.json.telefone, usuario: $('Buscar Usuário').item.json, sessao: $('Obter Sessão').item.json, mensagem: $('Extrair Dados').item.json.mensagem }) }}",
         "options": {}
       },
-      "id": "a1000001-0000-0000-0000-000000000018",
+      "id": "node-018",
       "name": "→ Motor 3 Serviço",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2660, 560]
+      "position": [2660, 460]
     },
     {
       "parameters": {
@@ -370,11 +376,11 @@
         "body": "={{ JSON.stringify({ telefone: $('Extrair Dados').item.json.telefone, usuario: $('Buscar Usuário').item.json, sessao: $('Obter Sessão').item.json, mensagem: $('Extrair Dados').item.json.mensagem }) }}",
         "options": {}
       },
-      "id": "a1000001-0000-0000-0000-000000000019",
+      "id": "node-019",
       "name": "→ Motor 4 Reparo",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2660, 680]
+      "position": [2660, 580]
     },
     {
       "parameters": {
@@ -386,11 +392,11 @@
         "body": "={{ JSON.stringify({ telefone: $('Extrair Dados').item.json.telefone, usuario: $('Buscar Usuário').item.json, sessao: $('Obter Sessão').item.json, mensagem: $('Extrair Dados').item.json.mensagem }) }}",
         "options": {}
       },
-      "id": "a1000001-0000-0000-0000-000000000020",
+      "id": "node-020",
       "name": "→ Motor 5 Delivery",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2660, 800]
+      "position": [2660, 700]
     },
     {
       "parameters": {
@@ -406,37 +412,14 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ number: $('Extrair Dados').item.json.telefone, text: 'Olá, ' + $('Buscar Usuário').item.json.nome + '! 👋\\n\\nO que você quer fazer?\\n\\n🚗 CORRIDAS\\n🏍️ Moto | 🚙 Carro\\n\\n📦 ENTREGAS\\n\\n💈 SERVIÇOS\\nBarbearia, Salão, Massagem\\n\\n🔧 REPAROS\\nEncanador, Eletricista, Pintor\\n\\n🍕 DELIVERY\\nPizza, Hambúrguer, Restaurante\\n\\nSó me diz o que precisa! 😊' }) }}",
+        "body": "={{ JSON.stringify({ number: $('Extrair Dados').item.json.telefone, text: 'Olá, ' + $('Buscar Usuário').item.json.nome + '! 👋\\n\\nO que você quer fazer?\\n\\n🏍️ *CORRIDA DE MOTO*\\n🚙 *CORRIDA DE CARRO*\\n📦 *ENTREGA*\\n🚗 *CARONA* (viagem)\\n\\n💈 *SERVIÇOS*\\nBarbearia, Salão, Massagem\\n\\n🔧 *REPAROS*\\nEncanador, Eletricista, Pintor\\n\\n🍕 *DELIVERY*\\nComida, Pizza, Hambúrguer\\n\\nÉ só me dizer o que precisa! 😊' }) }}",
         "options": {}
       },
-      "id": "a1000001-0000-0000-0000-000000000021",
+      "id": "node-021",
       "name": "Enviar Menu Principal",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2660, 920]
-    },
-    {
-      "parameters": {
-        "dataType": "string",
-        "value1": "={{ $json.motor_atual }}",
-        "rules": {
-          "rules": [
-            { "value2": "motor_1_corrida" },
-            { "value2": "motor_1_entrega" },
-            { "value2": "motor_2_carona" },
-            { "value2": "motor_3_servico" },
-            { "value2": "motor_4_reparo" },
-            { "value2": "motor_5_delivery" }
-          ]
-        },
-        "fallbackOutput": "extra",
-        "options": {}
-      },
-      "id": "a1000001-0000-0000-0000-000000000022",
-      "name": "Continuar Motor",
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 3,
-      "position": [2220, 300]
+      "position": [2660, 820]
     }
   ],
   "connections": {
@@ -456,10 +439,10 @@
     },
     "Extrair Dados": {
       "main": [
-        [{ "node": "Atualizar Pushname", "type": "main", "index": 0 }]
+        [{ "node": "Salvar Pushname", "type": "main", "index": 0 }]
       ]
     },
-    "Atualizar Pushname": {
+    "Salvar Pushname": {
       "main": [
         [{ "node": "Buscar Usuário", "type": "main", "index": 0 }]
       ]
@@ -483,38 +466,26 @@
     },
     "Obter Sessão": {
       "main": [
-        [{ "node": "Motor em andamento?", "type": "main", "index": 0 }]
+        [{ "node": "IA: Classificar Intenção", "type": "main", "index": 0 }]
       ]
     },
-    "Motor em andamento?": {
+    "IA: Classificar Intenção": {
       "main": [
-        [{ "node": "Continuar Motor", "type": "main", "index": 0 }],
-        [{ "node": "Detectar Intenção", "type": "main", "index": 0 }]
+        [{ "node": "Extrair Motor", "type": "main", "index": 0 }]
       ]
     },
-    "Continuar Motor": {
-      "main": [
-        [{ "node": "→ Motor 1 Corrida", "type": "main", "index": 0 }],
-        [{ "node": "→ Motor 1 Entrega", "type": "main", "index": 0 }],
-        [{ "node": "→ Motor 2 Carona", "type": "main", "index": 0 }],
-        [{ "node": "→ Motor 3 Serviço", "type": "main", "index": 0 }],
-        [{ "node": "→ Motor 4 Reparo", "type": "main", "index": 0 }],
-        [{ "node": "→ Motor 5 Delivery", "type": "main", "index": 0 }],
-        [{ "node": "Detectar Intenção", "type": "main", "index": 0 }]
-      ]
-    },
-    "Detectar Intenção": {
+    "Extrair Motor": {
       "main": [
         [{ "node": "Rotear Motor", "type": "main", "index": 0 }]
       ]
     },
     "Rotear Motor": {
       "main": [
-        [{ "node": "→ Motor 1 Corrida", "type": "main", "index": 0 }],
-        [{ "node": "→ Motor 1 Entrega", "type": "main", "index": 0 }],
-        [{ "node": "→ Motor 2 Carona", "type": "main", "index": 0 }],
-        [{ "node": "→ Motor 3 Serviço", "type": "main", "index": 0 }],
-        [{ "node": "→ Motor 4 Reparo", "type": "main", "index": 0 }],
+        [{ "node": "→ Motor 1 Corrida",  "type": "main", "index": 0 }],
+        [{ "node": "→ Motor 1 Entrega",  "type": "main", "index": 0 }],
+        [{ "node": "→ Motor 2 Carona",   "type": "main", "index": 0 }],
+        [{ "node": "→ Motor 3 Serviço",  "type": "main", "index": 0 }],
+        [{ "node": "→ Motor 4 Reparo",   "type": "main", "index": 0 }],
         [{ "node": "→ Motor 5 Delivery", "type": "main", "index": 0 }],
         [{ "node": "Enviar Menu Principal", "type": "main", "index": 0 }]
       ]
