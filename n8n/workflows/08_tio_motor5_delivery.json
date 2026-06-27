@@ -1,0 +1,611 @@
+{
+  "name": "08 TIO Motor 5 - Delivery Inteligente",
+  "nodes": [
+    {
+      "parameters": { "inputDataFieldName": "body" },
+      "id": "trigger",
+      "name": "Chamado pelo Maestro",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [120, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $json;\nconst ctx = d.sessao_contexto || {};\nconst etapa = ctx.etapa || 'inicio';\nreturn [{ json: { etapa, mensagem: d.mensagem, dados: d, contexto: ctx } }];"
+      },
+      "id": "detectar-etapa",
+      "name": "Detectar Etapa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [340, 400]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.etapa }}", "rightValue": "inicio", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "inicio" },
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.etapa }}", "rightValue": "aguardando_escolha_restaurante", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "aguardando_restaurante" },
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.etapa }}", "rightValue": "aguardando_itens", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "aguardando_itens" },
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.etapa }}", "rightValue": "aguardando_entrega_retirada", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "aguardando_entrega" },
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.etapa }}", "rightValue": "aguardando_pagamento", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "aguardando_pagamento" }
+          ]
+        },
+        "options": { "fallbackOutput": "extra" }
+      },
+      "id": "switch-etapa",
+      "name": "Switch Etapa",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [560, 400]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 100,\n  \"system\": \"O usuário quer pedir delivery. Identifique o tipo de comida. Responda APENAS com o tipo (ex: 'pizza', 'hamburguer', 'japonesa', 'brasileira', 'chinese', 'acai', 'pastel'). Se não identificar, responda 'variado'.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-tipo-comida",
+      "name": "IA: Tipo de Comida",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nconst tipo = resp.content?.[0]?.text?.trim().toLowerCase() || 'variado';\nreturn [{ json: { tipo_comida: tipo } }];"
+      },
+      "id": "extrair-tipo-comida",
+      "name": "Extrair Tipo Comida",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_buscar_estabelecimentos",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_tipo\": \"{{ $('Extrair Tipo Comida').item.json.tipo_comida }}\",\n  \"p_cidade_id\": \"{{ $('Chamado pelo Maestro').item.json.usuario.cidade_id }}\"\n}"
+      },
+      "id": "buscar-restaurantes",
+      "name": "Buscar Restaurantes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1240, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const restaurantes = Array.isArray($json) ? $json : [];\nif (restaurantes.length === 0) {\n  return [{ json: { texto: '😔 Não encontrei restaurantes com esse tipo de comida.\\n\\nQuer tentar outra opção?', encontrou: false, restaurantes: [] } }];\n}\nconst lista = restaurantes.slice(0, 4).map((r, i) => `*${i+1}. ${r.nome}*\\n   ⭐ ${r.avaliacao || '5.0'} | ⏱️ ${r.tempo_estimado || '?'} min | 🛵 R$ ${r.taxa_entrega || '0'}`).join('\\n\\n');\nreturn [{ json: { texto: `🍕 Encontrei estas opções de *${$('Extrair Tipo Comida').item.json.tipo_comida}*:\\n\\n${lista}\\n\\nDigite o número do restaurante!`, encontrou: true, restaurantes } }];"
+      },
+      "id": "formatar-restaurantes",
+      "name": "Formatar Restaurantes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1460, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_atualizar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\",\n  \"p_motor\": \"motor_5_delivery\",\n  \"p_contexto\": {\n    \"etapa\": \"aguardando_escolha_restaurante\",\n    \"tipo_comida\": \"{{ $('Extrair Tipo Comida').item.json.tipo_comida }}\",\n    \"restaurantes\": {{ JSON.stringify($('Formatar Restaurantes').item.json.restaurantes || []) }}\n  }\n}"
+      },
+      "id": "salvar-restaurantes",
+      "name": "Salvar Restaurantes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1680, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"{{ $('Formatar Restaurantes').item.json.texto }}\"\n}"
+      },
+      "id": "msg-restaurantes",
+      "name": "MSG: Lista Restaurantes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1900, 240]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 20,\n  \"system\": \"O usuário está escolhendo um restaurante de uma lista numerada. Extraia apenas o número. Responda APENAS com o número (1, 2, 3 ou 4).\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-escolha-restaurante",
+      "name": "IA: Escolha Restaurante",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nconst num = parseInt(resp.content?.[0]?.text?.trim() || '1') - 1;\nconst restaurantes = $('Detectar Etapa').item.json.contexto.restaurantes || [];\nconst escolhido = restaurantes[num] || restaurantes[0] || {};\nreturn [{ json: { restaurante: escolhido } }];"
+      },
+      "id": "extrair-restaurante",
+      "name": "Extrair Restaurante",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_buscar_itens_cardapio",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_estabelecimento_id\": \"{{ $('Extrair Restaurante').item.json.restaurante.id }}\",\n  \"p_busca\": \"\"\n}"
+      },
+      "id": "buscar-cardapio",
+      "name": "Buscar Cardápio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1240, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const itens = Array.isArray($json) ? $json : [];\nconst restaurante = $('Extrair Restaurante').item.json.restaurante;\nif (itens.length === 0) {\n  return [{ json: { texto: `O cardápio de *${restaurante.nome}* está vazio no momento.`, itens: [] } }];\n}\nconst lista = itens.slice(0, 8).map((item, i) => `*${i+1}.* ${item.nome} - R$ ${parseFloat(item.preco || 0).toFixed(2)}${item.descricao ? '\\n   _' + item.descricao + '_' : ''}`).join('\\n');\n// Cross-sell: pega um item aleatório como sugestão complementar\nconst sugestao = itens.find(i => i.categoria === 'bebida' || i.categoria === 'sobremesa');\nconst crossSell = sugestao ? `\\n\\n💡 *Sugestão:* ${sugestao.nome} (R$ ${parseFloat(sugestao.preco || 0).toFixed(2)}) combina muito!` : '';\nreturn [{ json: { texto: `🍽️ Cardápio de *${restaurante.nome}*:\\n\\n${lista}${crossSell}\\n\\nO que deseja pedir? (pode escrever o nome ou o número)`, itens } }];"
+      },
+      "id": "formatar-cardapio",
+      "name": "Formatar Cardápio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1460, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_atualizar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\",\n  \"p_motor\": \"motor_5_delivery\",\n  \"p_contexto\": {\n    \"etapa\": \"aguardando_itens\",\n    \"tipo_comida\": \"{{ $('Detectar Etapa').item.json.contexto.tipo_comida }}\",\n    \"restaurante\": {{ JSON.stringify($('Extrair Restaurante').item.json.restaurante) }},\n    \"cardapio\": {{ JSON.stringify($('Formatar Cardápio').item.json.itens) }}\n  }\n}"
+      },
+      "id": "salvar-restaurante",
+      "name": "Salvar Restaurante",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1680, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"{{ $('Formatar Cardápio').item.json.texto }}\"\n}"
+      },
+      "id": "msg-cardapio",
+      "name": "MSG: Cardápio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1900, 400]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 300,\n  \"system\": \"O usuário está escolhendo itens do cardápio. Cardápio disponível: {{ JSON.stringify($('Detectar Etapa').item.json.contexto.cardapio || []) }}. Identifique os itens escolhidos e quantidade. Responda em JSON: [{ id, nome, quantidade, preco }]. Responda APENAS o JSON array.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-itens-pedido",
+      "name": "IA: Itens do Pedido",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 560]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nlet itens = [];\ntry {\n  itens = JSON.parse(resp.content?.[0]?.text?.trim() || '[]');\n} catch(e) { itens = []; }\nconst restaurante = $('Detectar Etapa').item.json.contexto.restaurante || {};\nconst subtotal = itens.reduce((s, i) => s + (parseFloat(i.preco || 0) * (i.quantidade || 1)), 0);\nconst taxa_entrega = parseFloat(restaurante.taxa_entrega || 0);\nconst total = subtotal + taxa_entrega;\nconst resumo = itens.map(i => `${i.quantidade || 1}x ${i.nome} - R$ ${(parseFloat(i.preco || 0) * (i.quantidade || 1)).toFixed(2)}`).join('\\n');\nreturn [{ json: { itens, subtotal, taxa_entrega, total, resumo } }];"
+      },
+      "id": "processar-itens",
+      "name": "Processar Itens",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 560]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_atualizar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\",\n  \"p_motor\": \"motor_5_delivery\",\n  \"p_contexto\": {\n    \"etapa\": \"aguardando_entrega_retirada\",\n    \"restaurante\": {{ JSON.stringify($('Detectar Etapa').item.json.contexto.restaurante) }},\n    \"itens\": {{ JSON.stringify($('Processar Itens').item.json.itens) }},\n    \"subtotal\": {{ $('Processar Itens').item.json.subtotal }},\n    \"taxa_entrega\": {{ $('Processar Itens').item.json.taxa_entrega }},\n    \"total\": {{ $('Processar Itens').item.json.total }}\n  }\n}"
+      },
+      "id": "salvar-itens",
+      "name": "Salvar Itens",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1240, 560]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"🛒 *Seu pedido:*\\n\\n{{ $('Processar Itens').item.json.resumo }}\\n\\n🛵 Taxa de entrega: R$ {{ $('Processar Itens').item.json.taxa_entrega.toFixed(2) }}\\n💰 *Total: R$ {{ $('Processar Itens').item.json.total.toFixed(2) }}*\\n\\nComo deseja receber?\\n\\n🏠 *1* - Entregar no meu endereço\\n🏃 *2* - Vou buscar no restaurante (sem taxa)\"\n}"
+      },
+      "id": "msg-entrega-retirada",
+      "name": "MSG: Entrega ou Retirada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1460, 560]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 20,\n  \"system\": \"O usuário está escolhendo entre entrega em casa ou retirada no restaurante. Responda APENAS: 'entrega' ou 'retirada'.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-entrega-retirada",
+      "name": "IA: Entrega ou Retirada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 720]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nconst modo = resp.content?.[0]?.text?.trim().toLowerCase() || 'entrega';\nconst ctx = $('Detectar Etapa').item.json.contexto;\nconst total = modo === 'retirada' ? ctx.subtotal : ctx.total;\nreturn [{ json: { modo_entrega: modo, total_final: total } }];"
+      },
+      "id": "processar-entrega",
+      "name": "Processar Entrega",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 720]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_atualizar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\",\n  \"p_motor\": \"motor_5_delivery\",\n  \"p_contexto\": {\n    \"etapa\": \"aguardando_pagamento\",\n    \"restaurante\": {{ JSON.stringify($('Detectar Etapa').item.json.contexto.restaurante) }},\n    \"itens\": {{ JSON.stringify($('Detectar Etapa').item.json.contexto.itens) }},\n    \"modo_entrega\": \"{{ $('Processar Entrega').item.json.modo_entrega }}\",\n    \"total_final\": {{ $('Processar Entrega').item.json.total_final }}\n  }\n}"
+      },
+      "id": "salvar-entrega",
+      "name": "Salvar Entrega",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1240, 720]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"{{ $('Processar Entrega').item.json.modo_entrega === 'retirada' ? '🏃 Você vai buscar no restaurante.' : '🏠 Entregaremos no seu endereço cadastrado.' }}\\n\\n💰 *Total: R$ {{ $('Processar Entrega').item.json.total_final.toFixed(2) }}*\\n\\nComo deseja pagar?\\n\\n💳 *1* - PIX (receba cashback! 💰)\\n💵 *2* - Dinheiro\\n💳 *3* - Cartão na entrega\"\n}"
+      },
+      "id": "msg-pagamento",
+      "name": "MSG: Forma Pagamento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1460, 720]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 20,\n  \"system\": \"O usuário está escolhendo forma de pagamento. Responda APENAS: 'pix', 'dinheiro' ou 'cartao'.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-pagamento",
+      "name": "IA: Forma Pagamento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 880]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nconst forma = resp.content?.[0]?.text?.trim().toLowerCase() || 'dinheiro';\nreturn [{ json: { forma_pagamento: forma } }];"
+      },
+      "id": "extrair-pagamento",
+      "name": "Extrair Pagamento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 880]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [{ "leftValue": "={{ $json.forma_pagamento }}", "rightValue": "pix", "operator": { "type": "string", "operation": "equals" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-pix",
+      "name": "É PIX?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1240, 880]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ASAAS_BASE_URL }}/payments",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "access_token", "value": "={{ $env.ASAAS_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"billingType\": \"PIX\",\n  \"customer\": \"{{ $('Chamado pelo Maestro').item.json.usuario.asaas_customer_id }}\",\n  \"value\": {{ $('Detectar Etapa').item.json.contexto.total_final }},\n  \"dueDate\": \"{{ new Date(Date.now() + 30*60000).toISOString().split('T')[0] }}\",\n  \"description\": \"Delivery TIO - {{ $('Detectar Etapa').item.json.contexto.restaurante.nome }}\",\n  \"externalReference\": \"pendente\"\n}"
+      },
+      "id": "criar-pix",
+      "name": "Criar PIX",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1460, 800]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_criar_pedido_delivery",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_cliente_id\": \"{{ $('Chamado pelo Maestro').item.json.usuario.id }}\",\n  \"p_estabelecimento_id\": \"{{ $('Detectar Etapa').item.json.contexto.restaurante.id }}\",\n  \"p_cidade_id\": \"{{ $('Chamado pelo Maestro').item.json.usuario.cidade_id }}\",\n  \"p_itens\": {{ JSON.stringify($('Detectar Etapa').item.json.contexto.itens) }},\n  \"p_forma_pagamento\": \"{{ $('Extrair Pagamento').item.json.forma_pagamento }}\",\n  \"p_modo_entrega\": \"{{ $('Detectar Etapa').item.json.contexto.modo_entrega }}\",\n  \"p_valor_total\": {{ $('Detectar Etapa').item.json.contexto.total_final }},\n  \"p_pix_id_asaas\": \"{{ $('Criar PIX').item.json.id || '' }}\"\n}"
+      },
+      "id": "criar-pedido",
+      "name": "Criar Pedido",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1680, 880]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Detectar Etapa').item.json.contexto.restaurante.telefone }}\",\n  \"text\": \"🔔 *Novo pedido via TIO!*\\n\\n{{ $('Detectar Etapa').item.json.contexto.itens.map(i => i.quantidade + 'x ' + i.nome).join('\\n') }}\\n\\nTotal: R$ {{ $('Detectar Etapa').item.json.contexto.total_final.toFixed(2) }}\\nEntrega: {{ $('Detectar Etapa').item.json.contexto.modo_entrega }}\\nPagamento: {{ $('Extrair Pagamento').item.json.forma_pagamento }}\\n\\n✅ *ACEITAR*\\n❌ *RECUSAR*\"\n}"
+      },
+      "id": "notificar-restaurante",
+      "name": "Notificar Restaurante",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1900, 880]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"🍕 *Pedido enviado para {{ $('Detectar Etapa').item.json.contexto.restaurante.nome }}!*\\n\\n{{ $('Extrair Pagamento').item.json.forma_pagamento === 'pix' ? '💳 PIX gerado! Pague para confirmar o pedido.\\n📋 Copia e cola: ' + ($('Criar PIX').item.json.pixQrCode || '...') + '\\n\\n' : '' }}Aguarde a confirmação do restaurante! 🍳\\n\\nVocê será avisado assim que o pedido for aceito e saiu para entrega 🛵\"\n}"
+      },
+      "id": "msg-pedido-enviado",
+      "name": "MSG: Pedido Enviado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2120, 880]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_limpar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\"\n}"
+      },
+      "id": "limpar-sessao",
+      "name": "Limpar Sessão",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2340, 880]
+    }
+  ],
+  "connections": {
+    "Chamado pelo Maestro": { "main": [[{ "node": "Detectar Etapa", "type": "main", "index": 0 }]] },
+    "Detectar Etapa": { "main": [[{ "node": "Switch Etapa", "type": "main", "index": 0 }]] },
+    "Switch Etapa": {
+      "main": [
+        [{ "node": "IA: Tipo de Comida", "type": "main", "index": 0 }],
+        [{ "node": "IA: Escolha Restaurante", "type": "main", "index": 0 }],
+        [{ "node": "IA: Itens do Pedido", "type": "main", "index": 0 }],
+        [{ "node": "IA: Entrega ou Retirada", "type": "main", "index": 0 }],
+        [{ "node": "IA: Forma Pagamento", "type": "main", "index": 0 }]
+      ]
+    },
+    "IA: Tipo de Comida": { "main": [[{ "node": "Extrair Tipo Comida", "type": "main", "index": 0 }]] },
+    "Extrair Tipo Comida": { "main": [[{ "node": "Buscar Restaurantes", "type": "main", "index": 0 }]] },
+    "Buscar Restaurantes": { "main": [[{ "node": "Formatar Restaurantes", "type": "main", "index": 0 }]] },
+    "Formatar Restaurantes": { "main": [[{ "node": "Salvar Restaurantes", "type": "main", "index": 0 }]] },
+    "Salvar Restaurantes": { "main": [[{ "node": "MSG: Lista Restaurantes", "type": "main", "index": 0 }]] },
+    "IA: Escolha Restaurante": { "main": [[{ "node": "Extrair Restaurante", "type": "main", "index": 0 }]] },
+    "Extrair Restaurante": { "main": [[{ "node": "Buscar Cardápio", "type": "main", "index": 0 }]] },
+    "Buscar Cardápio": { "main": [[{ "node": "Formatar Cardápio", "type": "main", "index": 0 }]] },
+    "Formatar Cardápio": { "main": [[{ "node": "Salvar Restaurante", "type": "main", "index": 0 }]] },
+    "Salvar Restaurante": { "main": [[{ "node": "MSG: Cardápio", "type": "main", "index": 0 }]] },
+    "IA: Itens do Pedido": { "main": [[{ "node": "Processar Itens", "type": "main", "index": 0 }]] },
+    "Processar Itens": { "main": [[{ "node": "Salvar Itens", "type": "main", "index": 0 }]] },
+    "Salvar Itens": { "main": [[{ "node": "MSG: Entrega ou Retirada", "type": "main", "index": 0 }]] },
+    "IA: Entrega ou Retirada": { "main": [[{ "node": "Processar Entrega", "type": "main", "index": 0 }]] },
+    "Processar Entrega": { "main": [[{ "node": "Salvar Entrega", "type": "main", "index": 0 }]] },
+    "Salvar Entrega": { "main": [[{ "node": "MSG: Forma Pagamento", "type": "main", "index": 0 }]] },
+    "IA: Forma Pagamento": { "main": [[{ "node": "Extrair Pagamento", "type": "main", "index": 0 }]] },
+    "Extrair Pagamento": { "main": [[{ "node": "É PIX?", "type": "main", "index": 0 }]] },
+    "É PIX?": {
+      "main": [
+        [{ "node": "Criar PIX", "type": "main", "index": 0 }],
+        [{ "node": "Criar Pedido", "type": "main", "index": 0 }]
+      ]
+    },
+    "Criar PIX": { "main": [[{ "node": "Criar Pedido", "type": "main", "index": 0 }]] },
+    "Criar Pedido": { "main": [[{ "node": "Notificar Restaurante", "type": "main", "index": 0 }]] },
+    "Notificar Restaurante": { "main": [[{ "node": "MSG: Pedido Enviado", "type": "main", "index": 0 }]] },
+    "MSG: Pedido Enviado": { "main": [[{ "node": "Limpar Sessão", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "tags": [{ "name": "TIO" }],
+  "triggerCount": 0,
+  "updatedAt": "2026-06-27T00:00:00.000Z",
+  "versionId": "08-motor5-delivery-v1"
+}

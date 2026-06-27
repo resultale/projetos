@@ -1,0 +1,826 @@
+{
+  "name": "02 TIO Onboarding",
+  "nodes": [
+    {
+      "parameters": {
+        "inputDataFieldName": "body"
+      },
+      "id": "trigger-start",
+      "name": "Chamado pelo Maestro",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [120, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const dados = $json;\nconst contexto = dados.sessao_contexto || {};\nconst etapa = contexto.etapa || 'inicio';\nreturn [{ json: { etapa, mensagem: dados.mensagem, dados, contexto } }];"
+      },
+      "id": "detectar-etapa",
+      "name": "Detectar Etapa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [340, 400]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": { "options": { "caseSensitive": false }, "conditions": [{ "leftValue": "={{ $json.etapa }}", "rightValue": "inicio", "operator": { "type": "string", "operation": "equals" } }] },
+              "renameOutput": true,
+              "outputKey": "inicio"
+            },
+            {
+              "conditions": { "options": { "caseSensitive": false }, "conditions": [{ "leftValue": "={{ $json.etapa }}", "rightValue": "aguardando_nome", "operator": { "type": "string", "operation": "equals" } }] },
+              "renameOutput": true,
+              "outputKey": "aguardando_nome"
+            },
+            {
+              "conditions": { "options": { "caseSensitive": false }, "conditions": [{ "leftValue": "={{ $json.etapa }}", "rightValue": "aguardando_sexo", "operator": { "type": "string", "operation": "equals" } }] },
+              "renameOutput": true,
+              "outputKey": "aguardando_sexo"
+            },
+            {
+              "conditions": { "options": { "caseSensitive": false }, "conditions": [{ "leftValue": "={{ $json.etapa }}", "rightValue": "aguardando_endereco", "operator": { "type": "string", "operation": "equals" } }] },
+              "renameOutput": true,
+              "outputKey": "aguardando_endereco"
+            }
+          ]
+        },
+        "options": { "fallbackOutput": "extra" }
+      },
+      "id": "switch-etapa",
+      "name": "Switch Etapa",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [560, 400]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 100,\n  \"system\": \"Você extrai o nome de uma cidade brasileira de uma mensagem. Responda APENAS com o nome da cidade em formato limpo (ex: 'São Paulo', 'Belo Horizonte'). Se não encontrar cidade, responda 'NAO_IDENTIFICADO'.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-extrair-cidade",
+      "name": "IA: Extrair Cidade",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nconst cidade = resp.content?.[0]?.text?.trim() || 'NAO_IDENTIFICADO';\nreturn [{ json: { cidade_texto: cidade } }];"
+      },
+      "id": "extrair-cidade-resp",
+      "name": "Extrair Cidade da Resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_verificar_cidade",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_nome\": \"{{ $json.cidade_texto }}\"\n}"
+      },
+      "id": "verificar-cidade",
+      "name": "Verificar Cidade",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1240, 240]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [{ "leftValue": "={{ $json.ativa }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-cidade-ativa",
+      "name": "Cidade Ativa?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1460, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"Oi! 👋 Seja bem-vindo ao *TIO*!\\n\\nSou seu assistente de mobilidade e serviços urbanos.\\n\\nEm qual *cidade* você está?\"\n}"
+      },
+      "id": "msg-pedir-cidade",
+      "name": "MSG: Pedir Cidade",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_atualizar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\",\n  \"p_motor\": \"onboarding\",\n  \"p_contexto\": { \"etapa\": \"inicio\" }\n}"
+      },
+      "id": "salvar-inicio",
+      "name": "Salvar: Início",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1020, 400]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_atualizar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\",\n  \"p_motor\": \"onboarding\",\n  \"p_contexto\": {\n    \"etapa\": \"aguardando_nome\",\n    \"cidade_id\": \"{{ $('Verificar Cidade').item.json.id }}\",\n    \"cidade_nome\": \"{{ $('Verificar Cidade').item.json.nome }}\"\n  }\n}"
+      },
+      "id": "salvar-cidade",
+      "name": "Salvar Cidade",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1680, 160]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"Ótimo! O TIO já está em *{{ $('Verificar Cidade').item.json.nome }}*! 🎉\\n\\nQual é o seu *nome completo*?\"\n}"
+      },
+      "id": "msg-pedir-nome",
+      "name": "MSG: Pedir Nome",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1900, 160]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [{ "leftValue": "={{ $json.encontrada }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-cidade-encontrada",
+      "name": "Cidade Encontrada?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1680, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_registrar_interesse",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_nome\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"p_cidade_nome\": \"{{ $('Extrair Cidade da Resposta').item.json.cidade_texto }}\"\n}"
+      },
+      "id": "registrar-interesse",
+      "name": "Registrar Interesse",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1900, 280]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"Anotei! Assim que o TIO chegar em {{ $('Extrair Cidade da Resposta').item.json.cidade_texto }} você será o primeiro a saber! 🚀\"\n}"
+      },
+      "id": "msg-interesse",
+      "name": "MSG: Registrou Interesse",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2120, 280]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"Hmm, não encontrei essa cidade ainda. 🤔\\n\\nMe diz o nome da cidade onde você está:\"\n}"
+      },
+      "id": "msg-cidade-invalida",
+      "name": "MSG: Cidade Inválida",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1900, 360]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 100,\n  \"system\": \"O usuário está informando o nome completo. Extraia APENAS o nome completo da pessoa da mensagem. Se não houver um nome, retorne 'NAO_IDENTIFICADO'. Responda só o nome, sem mais nada.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-extrair-nome",
+      "name": "IA: Extrair Nome",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 560]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nconst nome = resp.content?.[0]?.text?.trim() || 'NAO_IDENTIFICADO';\nreturn [{ json: { nome } }];"
+      },
+      "id": "extrair-nome-resp",
+      "name": "Extrair Nome da Resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 560]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_atualizar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\",\n  \"p_motor\": \"onboarding\",\n  \"p_contexto\": {\n    \"etapa\": \"aguardando_sexo\",\n    \"cidade_id\": \"{{ $('Detectar Etapa').item.json.contexto.cidade_id }}\",\n    \"cidade_nome\": \"{{ $('Detectar Etapa').item.json.contexto.cidade_nome }}\",\n    \"nome\": \"{{ $('Extrair Nome da Resposta').item.json.nome }}\"\n  }\n}"
+      },
+      "id": "salvar-nome",
+      "name": "Salvar Nome",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1240, 560]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"Prazer, *{{ $('Extrair Nome da Resposta').item.json.nome }}*! 😊\\n\\nQual é o seu sexo?\\n\\n👨 *1* - Masculino\\n👩 *2* - Feminino\\n⭐ *3* - Prefiro não informar\"\n}"
+      },
+      "id": "msg-pedir-sexo",
+      "name": "MSG: Pedir Sexo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1460, 560]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 20,\n  \"system\": \"Identifique o sexo do usuário. Responda APENAS com uma palavra: 'masculino', 'feminino' ou 'nao_informado'.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-extrair-sexo",
+      "name": "IA: Extrair Sexo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 720]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nconst sexo = resp.content?.[0]?.text?.trim().toLowerCase() || 'nao_informado';\nreturn [{ json: { sexo } }];"
+      },
+      "id": "extrair-sexo-resp",
+      "name": "Extrair Sexo da Resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 720]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_atualizar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\",\n  \"p_motor\": \"onboarding\",\n  \"p_contexto\": {\n    \"etapa\": \"aguardando_endereco\",\n    \"cidade_id\": \"{{ $('Detectar Etapa').item.json.contexto.cidade_id }}\",\n    \"cidade_nome\": \"{{ $('Detectar Etapa').item.json.contexto.cidade_nome }}\",\n    \"nome\": \"{{ $('Detectar Etapa').item.json.contexto.nome }}\",\n    \"sexo\": \"{{ $('Extrair Sexo da Resposta').item.json.sexo }}\"\n  }\n}"
+      },
+      "id": "salvar-sexo",
+      "name": "Salvar Sexo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1240, 720]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"Ótimo! Agora me diz seu *endereço completo* em {{ $('Detectar Etapa').item.json.contexto.cidade_nome }}:\\n\\n📍 Rua, número e complemento\\n_(ex: Rua das Flores, 123, Apto 2)_\"\n}"
+      },
+      "id": "msg-pedir-endereco",
+      "name": "MSG: Pedir Endereço",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1460, 720]
+    },
+
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://maps.googleapis.com/maps/api/geocode/json",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "address", "value": "={{ $('Detectar Etapa').item.json.mensagem + ', ' + $('Detectar Etapa').item.json.contexto.cidade_nome + ', Brasil' }}" },
+            { "name": "key", "value": "={{ $env.GOOGLE_MAPS_API_KEY }}" }
+          ]
+        }
+      },
+      "id": "geocodificar",
+      "name": "Geocodificar Endereço",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 880]
+    },
+    {
+      "parameters": {
+        "jsCode": "const geo = $json;\nconst result = geo.results?.[0];\nif (!result) return [{ json: { valido: false } }];\nconst loc = result.geometry.location;\nreturn [{ json: {\n  valido: true,\n  endereco_formatado: result.formatted_address,\n  latitude: loc.lat,\n  longitude: loc.lng\n} }];"
+      },
+      "id": "extrair-geo",
+      "name": "Extrair Coordenadas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 880]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_atualizar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\",\n  \"p_motor\": \"onboarding\",\n  \"p_contexto\": {\n    \"etapa\": \"aguardando_confirmacao_endereco\",\n    \"cidade_id\": \"{{ $('Detectar Etapa').item.json.contexto.cidade_id }}\",\n    \"cidade_nome\": \"{{ $('Detectar Etapa').item.json.contexto.cidade_nome }}\",\n    \"nome\": \"{{ $('Detectar Etapa').item.json.contexto.nome }}\",\n    \"sexo\": \"{{ $('Detectar Etapa').item.json.contexto.sexo }}\",\n    \"endereco_formatado\": \"{{ $('Extrair Coordenadas').item.json.endereco_formatado }}\",\n    \"latitude\": {{ $('Extrair Coordenadas').item.json.latitude }},\n    \"longitude\": {{ $('Extrair Coordenadas').item.json.longitude }}\n  }\n}"
+      },
+      "id": "salvar-endereco",
+      "name": "Salvar Endereço",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1240, 880]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"Encontrei este endereço:\\n\\n📍 *{{ $('Extrair Coordenadas').item.json.endereco_formatado }}*\\n\\nEstá correto?\"\n}"
+      },
+      "id": "msg-confirmar-endereco",
+      "name": "MSG: Confirmar Endereço",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1460, 880]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 20,\n  \"system\": \"O usuário está confirmando ou negando um endereço. Responda APENAS 'sim' ou 'nao'.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-confirmar-endereco",
+      "name": "IA: Confirmar Endereço",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 1040]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nconst confirmou = resp.content?.[0]?.text?.trim().toLowerCase() === 'sim';\nreturn [{ json: { confirmou } }];"
+      },
+      "id": "extrair-confirmacao",
+      "name": "Extrair Confirmação",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 1040]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [{ "leftValue": "={{ $json.confirmou }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-confirmou",
+      "name": "Confirmou Endereço?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1240, 1040]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_atualizar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\",\n  \"p_motor\": \"onboarding\",\n  \"p_contexto\": {\n    \"etapa\": \"aguardando_tipo_endereco\",\n    \"cidade_id\": \"{{ $('Detectar Etapa').item.json.contexto.cidade_id }}\",\n    \"cidade_nome\": \"{{ $('Detectar Etapa').item.json.contexto.cidade_nome }}\",\n    \"nome\": \"{{ $('Detectar Etapa').item.json.contexto.nome }}\",\n    \"sexo\": \"{{ $('Detectar Etapa').item.json.contexto.sexo }}\",\n    \"endereco_formatado\": \"{{ $('Detectar Etapa').item.json.contexto.endereco_formatado }}\",\n    \"latitude\": {{ $('Detectar Etapa').item.json.contexto.latitude }},\n    \"longitude\": {{ $('Detectar Etapa').item.json.contexto.longitude }}\n  }\n}"
+      },
+      "id": "salvar-etapa-tipo",
+      "name": "Salvar Etapa: Tipo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1460, 980]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"Como quer chamar esse endereço?\\n\\n🏠 *1* - Casa\\n💼 *2* - Trabalho\\n🏋️ *3* - Academia\\n⭐ *4* - Outro\"\n}"
+      },
+      "id": "msg-tipo-endereco",
+      "name": "MSG: Tipo Endereço",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1680, 980]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 20,\n  \"system\": \"O usuário está escolhendo um tipo de endereço. Responda APENAS com uma palavra: 'casa', 'trabalho', 'academia' ou 'outro'.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-extrair-tipo",
+      "name": "IA: Extrair Tipo Endereço",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 1200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nconst tipo = resp.content?.[0]?.text?.trim().toLowerCase() || 'outro';\nreturn [{ json: { tipo_endereco: tipo } }];"
+      },
+      "id": "extrair-tipo-resp",
+      "name": "Extrair Tipo da Resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 1200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('Detectar Etapa').item.json.contexto;\nconst tipo = $('Extrair Tipo da Resposta').item.json.tipo_endereco;\nconst telefone = $('Chamado pelo Maestro').item.json.telefone;\nconst ultimos4 = telefone.replace(/\\D/g,'').slice(-4);\nreturn [{ json: { ...ctx, tipo_endereco: tipo, senha_inicial: ultimos4 } }];"
+      },
+      "id": "preparar-criacao",
+      "name": "Preparar Criação",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1240, 1200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_criar_usuario",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_telefone\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"p_pushname\": \"{{ $('Chamado pelo Maestro').item.json.pushname }}\",\n  \"p_nome\": \"{{ $json.nome }}\",\n  \"p_sexo\": \"{{ $json.sexo }}\",\n  \"p_cidade_id\": \"{{ $json.cidade_id }}\",\n  \"p_cidade_nome\": \"{{ $json.cidade_nome }}\",\n  \"p_senha\": \"{{ $json.senha_inicial }}\",\n  \"p_tipo_endereco\": \"{{ $json.tipo_endereco }}\",\n  \"p_endereco\": \"{{ $json.endereco_formatado }}\",\n  \"p_numero\": \"\",\n  \"p_complemento\": \"\",\n  \"p_latitude\": {{ $json.latitude }},\n  \"p_longitude\": {{ $json.longitude }}\n}"
+      },
+      "id": "criar-usuario",
+      "name": "Criar Usuário",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1460, 1200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"✅ *Cadastro concluído!* Bem-vindo ao TIO, {{ $('Preparar Criação').item.json.nome }}! 🎉\\n\\nSua senha são os últimos 4 dígitos do seu telefone.\\n\\nO que posso fazer por você?\\n\\n🏍️ *1* - Corrida ou moto\\n📦 *2* - Entrega\\n🚗 *3* - Carona compartilhada\\n✂️ *4* - Serviço (barbearia, salão...)\\n🔧 *5* - Reparo (encanador, eletricista...)\\n🍕 *6* - Delivery\\n\\nDigite o número ou descreva o que precisa!\"\n}"
+      },
+      "id": "msg-boas-vindas",
+      "name": "MSG: Boas-vindas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1680, 1200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_limpar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\"\n}"
+      },
+      "id": "limpar-sessao",
+      "name": "Limpar Sessão",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1900, 1200]
+    }
+  ],
+  "connections": {
+    "Chamado pelo Maestro": {
+      "main": [[{ "node": "Detectar Etapa", "type": "main", "index": 0 }]]
+    },
+    "Detectar Etapa": {
+      "main": [[{ "node": "Switch Etapa", "type": "main", "index": 0 }]]
+    },
+    "Switch Etapa": {
+      "main": [
+        [{ "node": "IA: Extrair Cidade", "type": "main", "index": 0 }],
+        [{ "node": "IA: Extrair Nome", "type": "main", "index": 0 }],
+        [{ "node": "IA: Extrair Sexo", "type": "main", "index": 0 }],
+        [{ "node": "Geocodificar Endereço", "type": "main", "index": 0 }],
+        [{ "node": "IA: Confirmar Endereço", "type": "main", "index": 0 }],
+        [{ "node": "IA: Extrair Tipo Endereço", "type": "main", "index": 0 }]
+      ]
+    },
+    "MSG: Pedir Cidade": {
+      "main": [[{ "node": "Salvar: Início", "type": "main", "index": 0 }]]
+    },
+    "IA: Extrair Cidade": {
+      "main": [[{ "node": "Extrair Cidade da Resposta", "type": "main", "index": 0 }]]
+    },
+    "Extrair Cidade da Resposta": {
+      "main": [[{ "node": "Verificar Cidade", "type": "main", "index": 0 }]]
+    },
+    "Verificar Cidade": {
+      "main": [[{ "node": "Cidade Ativa?", "type": "main", "index": 0 }]]
+    },
+    "Cidade Ativa?": {
+      "main": [
+        [{ "node": "Salvar Cidade", "type": "main", "index": 0 }],
+        [{ "node": "Cidade Encontrada?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Salvar Cidade": {
+      "main": [[{ "node": "MSG: Pedir Nome", "type": "main", "index": 0 }]]
+    },
+    "Cidade Encontrada?": {
+      "main": [
+        [{ "node": "Registrar Interesse", "type": "main", "index": 0 }],
+        [{ "node": "MSG: Cidade Inválida", "type": "main", "index": 0 }]
+      ]
+    },
+    "Registrar Interesse": {
+      "main": [[{ "node": "MSG: Registrou Interesse", "type": "main", "index": 0 }]]
+    },
+    "IA: Extrair Nome": {
+      "main": [[{ "node": "Extrair Nome da Resposta", "type": "main", "index": 0 }]]
+    },
+    "Extrair Nome da Resposta": {
+      "main": [[{ "node": "Salvar Nome", "type": "main", "index": 0 }]]
+    },
+    "Salvar Nome": {
+      "main": [[{ "node": "MSG: Pedir Sexo", "type": "main", "index": 0 }]]
+    },
+    "IA: Extrair Sexo": {
+      "main": [[{ "node": "Extrair Sexo da Resposta", "type": "main", "index": 0 }]]
+    },
+    "Extrair Sexo da Resposta": {
+      "main": [[{ "node": "Salvar Sexo", "type": "main", "index": 0 }]]
+    },
+    "Salvar Sexo": {
+      "main": [[{ "node": "MSG: Pedir Endereço", "type": "main", "index": 0 }]]
+    },
+    "Geocodificar Endereço": {
+      "main": [[{ "node": "Extrair Coordenadas", "type": "main", "index": 0 }]]
+    },
+    "Extrair Coordenadas": {
+      "main": [[{ "node": "Salvar Endereço", "type": "main", "index": 0 }]]
+    },
+    "Salvar Endereço": {
+      "main": [[{ "node": "MSG: Confirmar Endereço", "type": "main", "index": 0 }]]
+    },
+    "IA: Confirmar Endereço": {
+      "main": [[{ "node": "Extrair Confirmação", "type": "main", "index": 0 }]]
+    },
+    "Extrair Confirmação": {
+      "main": [[{ "node": "Confirmou Endereço?", "type": "main", "index": 0 }]]
+    },
+    "Confirmou Endereço?": {
+      "main": [
+        [{ "node": "Salvar Etapa: Tipo", "type": "main", "index": 0 }],
+        [{ "node": "MSG: Pedir Endereço", "type": "main", "index": 0 }]
+      ]
+    },
+    "Salvar Etapa: Tipo": {
+      "main": [[{ "node": "MSG: Tipo Endereço", "type": "main", "index": 0 }]]
+    },
+    "IA: Extrair Tipo Endereço": {
+      "main": [[{ "node": "Extrair Tipo da Resposta", "type": "main", "index": 0 }]]
+    },
+    "Extrair Tipo da Resposta": {
+      "main": [[{ "node": "Preparar Criação", "type": "main", "index": 0 }]]
+    },
+    "Preparar Criação": {
+      "main": [[{ "node": "Criar Usuário", "type": "main", "index": 0 }]]
+    },
+    "Criar Usuário": {
+      "main": [[{ "node": "MSG: Boas-vindas", "type": "main", "index": 0 }]]
+    },
+    "MSG: Boas-vindas": {
+      "main": [[{ "node": "Limpar Sessão", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "tags": [{ "name": "TIO" }],
+  "triggerCount": 0,
+  "updatedAt": "2026-06-27T00:00:00.000Z",
+  "versionId": "02-onboarding-v2-ia"
+}

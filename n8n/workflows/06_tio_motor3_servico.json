@@ -1,0 +1,373 @@
+{
+  "name": "06 TIO Motor 3 - Serviços (Agendamento)",
+  "nodes": [
+    {
+      "parameters": { "inputDataFieldName": "body" },
+      "id": "trigger",
+      "name": "Chamado pelo Maestro",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [120, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $json;\nconst ctx = d.sessao_contexto || {};\nconst etapa = ctx.etapa || 'inicio';\nreturn [{ json: { etapa, mensagem: d.mensagem, dados: d, contexto: ctx } }];"
+      },
+      "id": "detectar-etapa",
+      "name": "Detectar Etapa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [340, 400]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.etapa }}", "rightValue": "inicio", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "inicio" },
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.etapa }}", "rightValue": "aguardando_periodo", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "aguardando_periodo" },
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.etapa }}", "rightValue": "aguardando_escolha_prestador", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "aguardando_escolha_prestador" }
+          ]
+        },
+        "options": { "fallbackOutput": "extra" }
+      },
+      "id": "switch-etapa",
+      "name": "Switch Etapa",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [560, 400]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 100,\n  \"system\": \"O usuário quer agendar um serviço. Identifique o tipo de serviço mencionado. Responda APENAS com o tipo em português simples (ex: 'barbearia', 'salao_cabelo', 'manicure', 'massagem', 'estetica'). Se não identificar, responda 'servico_geral'.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-tipo-servico",
+      "name": "IA: Identificar Serviço",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nconst tipo = resp.content?.[0]?.text?.trim().toLowerCase() || 'servico_geral';\nreturn [{ json: { tipo_servico: tipo } }];"
+      },
+      "id": "extrair-tipo",
+      "name": "Extrair Tipo Serviço",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_atualizar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\",\n  \"p_motor\": \"motor_3_servico\",\n  \"p_contexto\": { \"etapa\": \"aguardando_periodo\", \"tipo_servico\": \"{{ $('Extrair Tipo Serviço').item.json.tipo_servico }}\" }\n}"
+      },
+      "id": "salvar-servico",
+      "name": "Salvar Serviço",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1240, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"✂️ Ótimo! Vou buscar opções de *{{ $('Extrair Tipo Serviço').item.json.tipo_servico.replace('_', ' ') }}* para você.\\n\\nQual período você prefere?\\n\\n🌅 *1* - Manhã\\n☀️ *2* - Tarde\\n🌙 *3* - Noite\\n\\n_O prestador irá confirmar o horário exato_\"\n}"
+      },
+      "id": "msg-periodo",
+      "name": "MSG: Preferência Período",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1460, 240]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 20,\n  \"system\": \"O usuário está escolhendo um período do dia. Responda APENAS: 'manha', 'tarde' ou 'noite'.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-periodo",
+      "name": "IA: Extrair Período",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nconst periodo = resp.content?.[0]?.text?.trim().toLowerCase() || 'tarde';\nreturn [{ json: { periodo } }];"
+      },
+      "id": "extrair-periodo",
+      "name": "Extrair Período",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_buscar_prestadores",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_tipo_servico\": \"{{ $('Detectar Etapa').item.json.contexto.tipo_servico }}\",\n  \"p_cidade_id\": \"{{ $('Chamado pelo Maestro').item.json.usuario.cidade_id }}\"\n}"
+      },
+      "id": "buscar-prestadores",
+      "name": "Buscar Prestadores",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1240, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prestadores = Array.isArray($json) ? $json : [];\nif (prestadores.length === 0) {\n  return [{ json: { texto: '😔 Não encontrei prestadores disponíveis agora.\\n\\nTente novamente mais tarde!', encontrou: false } }];\n}\nconst lista = prestadores.slice(0, 3).map((p, i) => `*${i+1}. ${p.nome}*\\n   ⭐ ${p.avaliacao_media || '5.0'} | 💰 A partir de R$ ${p.preco_minimo || '?'}`).join('\\n\\n');\nreturn [{ json: { texto: `Aqui estão as opções disponíveis:\\n\\n${lista}\\n\\nDigite o número da sua escolha!`, encontrou: true, prestadores } }];"
+      },
+      "id": "formatar-prestadores",
+      "name": "Formatar Prestadores",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1460, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_atualizar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\",\n  \"p_motor\": \"motor_3_servico\",\n  \"p_contexto\": {\n    \"etapa\": \"aguardando_escolha_prestador\",\n    \"tipo_servico\": \"{{ $('Detectar Etapa').item.json.contexto.tipo_servico }}\",\n    \"periodo\": \"{{ $('Extrair Período').item.json.periodo }}\",\n    \"prestadores\": {{ JSON.stringify($('Formatar Prestadores').item.json.prestadores || []) }}\n  }\n}"
+      },
+      "id": "salvar-periodo",
+      "name": "Salvar Período",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1680, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"{{ $('Formatar Prestadores').item.json.texto }}\"\n}"
+      },
+      "id": "msg-prestadores",
+      "name": "MSG: Lista Prestadores",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1900, 400]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 20,\n  \"system\": \"O usuário está escolhendo um prestador de serviço de uma lista numerada. Extraia o número escolhido. Responda APENAS com o número (1, 2 ou 3). Se não identificar, responda 1.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-escolha-prestador",
+      "name": "IA: Escolha Prestador",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 560]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nconst num = parseInt(resp.content?.[0]?.text?.trim() || '1') - 1;\nconst prestadores = $('Detectar Etapa').item.json.contexto.prestadores || [];\nconst escolhido = prestadores[num] || prestadores[0] || {};\nreturn [{ json: { prestador: escolhido, indice: num } }];"
+      },
+      "id": "extrair-escolha",
+      "name": "Extrair Escolha",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 560]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_criar_agendamento",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_cliente_id\": \"{{ $('Chamado pelo Maestro').item.json.usuario.id }}\",\n  \"p_prestador_id\": \"{{ $('Extrair Escolha').item.json.prestador.id }}\",\n  \"p_cidade_id\": \"{{ $('Chamado pelo Maestro').item.json.usuario.cidade_id }}\",\n  \"p_motor\": \"oferta_agendamento\",\n  \"p_tipo_servico\": \"{{ $('Detectar Etapa').item.json.contexto.tipo_servico }}\",\n  \"p_dados\": {\n    \"periodo_preferido\": \"{{ $('Detectar Etapa').item.json.contexto.periodo }}\",\n    \"prestador_nome\": \"{{ $('Extrair Escolha').item.json.prestador.nome }}\"\n  }\n}"
+      },
+      "id": "criar-agendamento",
+      "name": "Criar Agendamento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1240, 560]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Extrair Escolha').item.json.prestador.telefone }}\",\n  \"text\": \"🔔 *Nova solicitação de agendamento via TIO*\\n\\nCliente quer: *{{ $('Detectar Etapa').item.json.contexto.tipo_servico.replace('_', ' ') }}*\\nPeríodo preferido: {{ $('Detectar Etapa').item.json.contexto.periodo }}\\n\\nPode atender? Se sim, qual horário disponível?\\n\\n✅ *CONFIRMAR* (+ horário)\\n❌ *RECUSAR*\"\n}"
+      },
+      "id": "notificar-prestador",
+      "name": "Notificar Prestador",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1460, 560]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"✅ *Solicitação enviada!*\\n\\n📍 *{{ $('Extrair Escolha').item.json.prestador.nome }}* foi notificado e vai confirmar um horário para você.\\n\\n🕐 Aguarde a confirmação (geralmente em menos de 30 min)\\n\\n_Quando confirmado, você receberá uma notificação com o horário!_ 😊\"\n}"
+      },
+      "id": "msg-aguardando",
+      "name": "MSG: Aguardando Confirmação",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1680, 560]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_limpar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\"\n}"
+      },
+      "id": "limpar-sessao",
+      "name": "Limpar Sessão",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1900, 560]
+    }
+  ],
+  "connections": {
+    "Chamado pelo Maestro": { "main": [[{ "node": "Detectar Etapa", "type": "main", "index": 0 }]] },
+    "Detectar Etapa": { "main": [[{ "node": "Switch Etapa", "type": "main", "index": 0 }]] },
+    "Switch Etapa": {
+      "main": [
+        [{ "node": "IA: Identificar Serviço", "type": "main", "index": 0 }],
+        [{ "node": "IA: Extrair Período", "type": "main", "index": 0 }],
+        [{ "node": "IA: Escolha Prestador", "type": "main", "index": 0 }]
+      ]
+    },
+    "IA: Identificar Serviço": { "main": [[{ "node": "Extrair Tipo Serviço", "type": "main", "index": 0 }]] },
+    "Extrair Tipo Serviço": { "main": [[{ "node": "Salvar Serviço", "type": "main", "index": 0 }]] },
+    "Salvar Serviço": { "main": [[{ "node": "MSG: Preferência Período", "type": "main", "index": 0 }]] },
+    "IA: Extrair Período": { "main": [[{ "node": "Extrair Período", "type": "main", "index": 0 }]] },
+    "Extrair Período": { "main": [[{ "node": "Buscar Prestadores", "type": "main", "index": 0 }]] },
+    "Buscar Prestadores": { "main": [[{ "node": "Formatar Prestadores", "type": "main", "index": 0 }]] },
+    "Formatar Prestadores": { "main": [[{ "node": "Salvar Período", "type": "main", "index": 0 }]] },
+    "Salvar Período": { "main": [[{ "node": "MSG: Lista Prestadores", "type": "main", "index": 0 }]] },
+    "IA: Escolha Prestador": { "main": [[{ "node": "Extrair Escolha", "type": "main", "index": 0 }]] },
+    "Extrair Escolha": { "main": [[{ "node": "Criar Agendamento", "type": "main", "index": 0 }]] },
+    "Criar Agendamento": { "main": [[{ "node": "Notificar Prestador", "type": "main", "index": 0 }]] },
+    "Notificar Prestador": { "main": [[{ "node": "MSG: Aguardando Confirmação", "type": "main", "index": 0 }]] },
+    "MSG: Aguardando Confirmação": { "main": [[{ "node": "Limpar Sessão", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "tags": [{ "name": "TIO" }],
+  "triggerCount": 0,
+  "updatedAt": "2026-06-27T00:00:00.000Z",
+  "versionId": "06-motor3-servico-v1"
+}
