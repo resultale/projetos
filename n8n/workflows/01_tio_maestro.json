@@ -1,0 +1,525 @@
+{
+  "name": "TIO - 01 Maestro",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "tio-maestro",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000001",
+      "name": "Webhook Evolution",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "a1000001-0000-0000-0000-000000000099"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK",
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000002",
+      "name": "Responder 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [460, 160]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond-frommme",
+              "leftValue": "={{ $json.body.data.key.fromMe }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000003",
+      "name": "É mensagem do bot?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f1",
+              "name": "telefone",
+              "value": "={{ $json.body.data.key.remoteJid.replace('@s.whatsapp.net','').replace('@c.us','') }}",
+              "type": "string"
+            },
+            {
+              "id": "f2",
+              "name": "pushname",
+              "value": "={{ $json.body.data.pushName || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "f3",
+              "name": "mensagem",
+              "value": "={{ $json.body.data.message?.conversation || $json.body.data.message?.extendedTextMessage?.text || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "f4",
+              "name": "instancia",
+              "value": "={{ $json.body.instance || '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000004",
+      "name": "Extrair Dados",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_atualizar_pushname",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ p_telefone: $json.telefone, p_pushname: $json.pushname }) }}",
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000005",
+      "name": "Atualizar Pushname",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_obter_usuario",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ p_telefone: $('Extrair Dados').item.json.telefone }) }}",
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000006",
+      "name": "Buscar Usuário",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond-encontrado",
+              "leftValue": "={{ $json.encontrado }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000007",
+      "name": "Usuário existe?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_WEBHOOK_BASE }}/tio-onboarding",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ telefone: $('Extrair Dados').item.json.telefone, pushname: $('Extrair Dados').item.json.pushname, mensagem: $('Extrair Dados').item.json.mensagem }) }}",
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000008",
+      "name": "→ Onboarding",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 440]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond-bloqueado",
+              "leftValue": "={{ $json.bloqueado }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000009",
+      "name": "Está bloqueado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ number: $('Extrair Dados').item.json.telefone, text: '⚠️ Sua conta está temporariamente bloqueada.\\nMotivo: ' + $('Buscar Usuário').item.json.motivo_bloqueio + '\\n\\nEntre em contato com o suporte.' }) }}",
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000010",
+      "name": "Msg: Conta Bloqueada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 440]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_obter_ou_criar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ p_usuario_id: $('Buscar Usuário').item.json.id }) }}",
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000011",
+      "name": "Obter Sessão",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond-motor",
+              "leftValue": "={{ $json.motor_atual }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000012",
+      "name": "Motor em andamento?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Detecta intenção da mensagem e retorna o motor correspondente\nconst msg = $('Extrair Dados').item.json.mensagem.toLowerCase();\n\nlet motor = 'menu_principal';\n\nif (/\\bmoto\\b|\\bcorrida\\b|\\buber\\b|\\b99\\b|\\bindriver\\b/.test(msg)) {\n  motor = 'motor_1_corrida';\n} else if (/\\bentrega\\b|\\bentregar\\b|\\bmotoboy\\b/.test(msg)) {\n  motor = 'motor_1_entrega';\n} else if (/\\bcarona\\b|\\bvou pra\\b|\\bviagem\\b|\\bvou para\\b/.test(msg)) {\n  motor = 'motor_2_carona';\n} else if (/\\bcabelo\\b|\\bbarba\\b|\\bcortar\\b|\\bbarbearia\\b|\\bsal.o\\b|\\bmassagem\\b/.test(msg)) {\n  motor = 'motor_3_servico';\n} else if (/\\bchuveir\\b|\\bvazamento\\b|\\bencanador\\b|\\beletricista\\b|\\breparo\\b|\\bpintor\\b/.test(msg)) {\n  motor = 'motor_4_reparo';\n} else if (/\\bpizza\\b|\\bhamb.rguer\\b|\\bcomida\\b|\\bdelivery\\b|\\bpedido\\b|\\brestaurante\\b|\\blanche\\b/.test(msg)) {\n  motor = 'motor_5_delivery';\n}\n\nreturn [{ json: { motor, mensagem: msg } }];"
+      },
+      "id": "a1000001-0000-0000-0000-000000000013",
+      "name": "Detectar Intenção",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 440]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.motor }}",
+        "rules": {
+          "rules": [
+            { "value2": "motor_1_corrida" },
+            { "value2": "motor_1_entrega" },
+            { "value2": "motor_2_carona" },
+            { "value2": "motor_3_servico" },
+            { "value2": "motor_4_reparo" },
+            { "value2": "motor_5_delivery" }
+          ]
+        },
+        "fallbackOutput": "extra",
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000014",
+      "name": "Rotear Motor",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [2440, 440]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_WEBHOOK_BASE }}/tio-motor1-corrida",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ telefone: $('Extrair Dados').item.json.telefone, usuario: $('Buscar Usuário').item.json, sessao: $('Obter Sessão').item.json, mensagem: $('Extrair Dados').item.json.mensagem }) }}",
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000015",
+      "name": "→ Motor 1 Corrida",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2660, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_WEBHOOK_BASE }}/tio-motor1-entrega",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ telefone: $('Extrair Dados').item.json.telefone, usuario: $('Buscar Usuário').item.json, sessao: $('Obter Sessão').item.json, mensagem: $('Extrair Dados').item.json.mensagem }) }}",
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000016",
+      "name": "→ Motor 1 Entrega",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2660, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_WEBHOOK_BASE }}/tio-motor2-carona",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ telefone: $('Extrair Dados').item.json.telefone, usuario: $('Buscar Usuário').item.json, sessao: $('Obter Sessão').item.json, mensagem: $('Extrair Dados').item.json.mensagem }) }}",
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000017",
+      "name": "→ Motor 2 Carona",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2660, 440]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_WEBHOOK_BASE }}/tio-motor3-servico",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ telefone: $('Extrair Dados').item.json.telefone, usuario: $('Buscar Usuário').item.json, sessao: $('Obter Sessão').item.json, mensagem: $('Extrair Dados').item.json.mensagem }) }}",
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000018",
+      "name": "→ Motor 3 Serviço",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2660, 560]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_WEBHOOK_BASE }}/tio-motor4-reparo",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ telefone: $('Extrair Dados').item.json.telefone, usuario: $('Buscar Usuário').item.json, sessao: $('Obter Sessão').item.json, mensagem: $('Extrair Dados').item.json.mensagem }) }}",
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000019",
+      "name": "→ Motor 4 Reparo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2660, 680]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_WEBHOOK_BASE }}/tio-motor5-delivery",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ telefone: $('Extrair Dados').item.json.telefone, usuario: $('Buscar Usuário').item.json, sessao: $('Obter Sessão').item.json, mensagem: $('Extrair Dados').item.json.mensagem }) }}",
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000020",
+      "name": "→ Motor 5 Delivery",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2660, 800]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ number: $('Extrair Dados').item.json.telefone, text: 'Olá, ' + $('Buscar Usuário').item.json.nome + '! 👋\\n\\nO que você quer fazer?\\n\\n🚗 CORRIDAS\\n🏍️ Moto | 🚙 Carro\\n\\n📦 ENTREGAS\\n\\n💈 SERVIÇOS\\nBarbearia, Salão, Massagem\\n\\n🔧 REPAROS\\nEncanador, Eletricista, Pintor\\n\\n🍕 DELIVERY\\nPizza, Hambúrguer, Restaurante\\n\\nSó me diz o que precisa! 😊' }) }}",
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000021",
+      "name": "Enviar Menu Principal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2660, 920]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.motor_atual }}",
+        "rules": {
+          "rules": [
+            { "value2": "motor_1_corrida" },
+            { "value2": "motor_1_entrega" },
+            { "value2": "motor_2_carona" },
+            { "value2": "motor_3_servico" },
+            { "value2": "motor_4_reparo" },
+            { "value2": "motor_5_delivery" }
+          ]
+        },
+        "fallbackOutput": "extra",
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000022",
+      "name": "Continuar Motor",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [2220, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Evolution": {
+      "main": [
+        [
+          { "node": "Responder 200", "type": "main", "index": 0 },
+          { "node": "É mensagem do bot?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "É mensagem do bot?": {
+      "main": [
+        [],
+        [{ "node": "Extrair Dados", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extrair Dados": {
+      "main": [
+        [{ "node": "Atualizar Pushname", "type": "main", "index": 0 }]
+      ]
+    },
+    "Atualizar Pushname": {
+      "main": [
+        [{ "node": "Buscar Usuário", "type": "main", "index": 0 }]
+      ]
+    },
+    "Buscar Usuário": {
+      "main": [
+        [{ "node": "Usuário existe?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Usuário existe?": {
+      "main": [
+        [{ "node": "Está bloqueado?", "type": "main", "index": 0 }],
+        [{ "node": "→ Onboarding", "type": "main", "index": 0 }]
+      ]
+    },
+    "Está bloqueado?": {
+      "main": [
+        [{ "node": "Msg: Conta Bloqueada", "type": "main", "index": 0 }],
+        [{ "node": "Obter Sessão", "type": "main", "index": 0 }]
+      ]
+    },
+    "Obter Sessão": {
+      "main": [
+        [{ "node": "Motor em andamento?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Motor em andamento?": {
+      "main": [
+        [{ "node": "Continuar Motor", "type": "main", "index": 0 }],
+        [{ "node": "Detectar Intenção", "type": "main", "index": 0 }]
+      ]
+    },
+    "Continuar Motor": {
+      "main": [
+        [{ "node": "→ Motor 1 Corrida", "type": "main", "index": 0 }],
+        [{ "node": "→ Motor 1 Entrega", "type": "main", "index": 0 }],
+        [{ "node": "→ Motor 2 Carona", "type": "main", "index": 0 }],
+        [{ "node": "→ Motor 3 Serviço", "type": "main", "index": 0 }],
+        [{ "node": "→ Motor 4 Reparo", "type": "main", "index": 0 }],
+        [{ "node": "→ Motor 5 Delivery", "type": "main", "index": 0 }],
+        [{ "node": "Detectar Intenção", "type": "main", "index": 0 }]
+      ]
+    },
+    "Detectar Intenção": {
+      "main": [
+        [{ "node": "Rotear Motor", "type": "main", "index": 0 }]
+      ]
+    },
+    "Rotear Motor": {
+      "main": [
+        [{ "node": "→ Motor 1 Corrida", "type": "main", "index": 0 }],
+        [{ "node": "→ Motor 1 Entrega", "type": "main", "index": 0 }],
+        [{ "node": "→ Motor 2 Carona", "type": "main", "index": 0 }],
+        [{ "node": "→ Motor 3 Serviço", "type": "main", "index": 0 }],
+        [{ "node": "→ Motor 4 Reparo", "type": "main", "index": 0 }],
+        [{ "node": "→ Motor 5 Delivery", "type": "main", "index": 0 }],
+        [{ "node": "Enviar Menu Principal", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" }
+}
