@@ -1,0 +1,100 @@
+{
+  "name": "Motor 1: Corrida",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "motor1-corrida",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook_trigger",
+      "name": "Webhook - Trigger Maestro",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "motor1-corrida-webhook"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Log dos dados recebidos do Maestro\nreturn [\n  {\n    json: {\n      timestamp: new Date().toISOString(),\n      dados_recebidos: $input.all()[0].json,\n      mensagem: \"Dados recebidos com sucesso\"\n    }\n  }\n];"
+      },
+      "id": "log_node",
+      "name": "Log - Dados Recebidos",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "responseCode": 200,
+        "responseData": "{\n  \"status\": \"sucesso\",\n  \"mensagem\": \"Requisição processada com sucesso\",\n  \"dados\": {\n    \"telefone\": \"{{ $json.p_telefone }}\",\n    \"usuario\": \"{{ $json.usuario }}\",\n    \"timestamp\": \"{{ $now.toISOString() }}\"\n  }\n}"
+      },
+      "id": "webhook_response",
+      "name": "Webhook Response - Retorno",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [750, 300]
+    }
+  ],
+  "connections": {
+    "webhook_trigger": {
+      "main": [
+        [
+          {
+            "node": "log_node",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "log_node": {
+      "main": [
+        [
+          {
+            "node": "webhook_response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "saveManualExecutions": true,
+    "callerPolicy": "any",
+    "executionOrder": "v1"
+  },
+  "schemaVersion": 1,
+  "id": null,
+  "meta": {
+    "instanceId": "local",
+    "templateId": null
+  },
+  "versionId": null,
+  "tags": [
+    {
+      "id": "1",
+      "name": "motor-1"
+    },
+    {
+      "id": "2",
+      "name": "corrida"
+    }
+  ],
+  "pinData": {},
+  "documentation": {
+    "description": "Workflow simples para Motor 1: Corrida",
+    "input_esperado": {
+      "p_telefone": "string - telefone do cliente",
+      "p_mensagem": "string - mensagem da corrida",
+      "usuario": "string - identificador do usuário"
+    },
+    "fluxo": [
+      "1. Webhook recebe dados do Maestro",
+      "2. Log processa e registra os dados",
+      "3. Webhook Response retorna confirmação ao cliente"
+    ]
+  }
+}
