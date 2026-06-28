@@ -1,0 +1,512 @@
+{
+  "name": "07 TIO Motor 4 - Reparos (Orçamento)",
+  "nodes": [
+    {
+      "parameters": { "inputDataFieldName": "body" },
+      "id": "trigger",
+      "name": "Chamado pelo Maestro",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [120, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $json;\nconst ctx = d.sessao_contexto || {};\nconst etapa = ctx.etapa || 'inicio';\nreturn [{ json: { etapa, mensagem: d.mensagem, dados: d, contexto: ctx } }];"
+      },
+      "id": "detectar-etapa",
+      "name": "Detectar Etapa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [340, 400]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.etapa }}", "rightValue": "inicio", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "inicio" },
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.etapa }}", "rightValue": "coletando_detalhes", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "coletando_detalhes" },
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.etapa }}", "rightValue": "aguardando_escolha_prestador", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "aguardando_escolha" }
+          ]
+        },
+        "options": { "fallbackOutput": "extra" }
+      },
+      "id": "switch-etapa",
+      "name": "Switch Etapa",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [560, 400]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 300,\n  \"system\": \"O usuário precisa de um profissional para reparo. Analise a mensagem e responda em JSON: { tipo_profissional: 'eletricista'|'encanador'|'pintor'|'marido_aluguel'|'ar_condicionado'|'outros', descricao_problema: string, precisa_mais_info: boolean, pergunta_adicional: string_ou_null }. Se o problema não estiver claro, peça uma informação específica. Responda APENAS o JSON.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-analisar-problema",
+      "name": "IA: Analisar Problema",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nlet dados = {};\ntry {\n  dados = JSON.parse(resp.content?.[0]?.text?.trim() || '{}');\n} catch(e) { dados = { tipo_profissional: 'outros', descricao_problema: $('Detectar Etapa').item.json.mensagem, precisa_mais_info: false }; }\nreturn [{ json: dados }];"
+      },
+      "id": "processar-problema",
+      "name": "Processar Problema",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 240]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [{ "leftValue": "={{ $json.precisa_mais_info }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-mais-info",
+      "name": "Precisa Mais Info?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1240, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"🔧 Para encontrar o profissional certo, preciso de mais uma informação:\\n\\n{{ $('Processar Problema').item.json.pergunta_adicional }}\"\n}"
+      },
+      "id": "msg-mais-info",
+      "name": "MSG: Pedir Mais Info",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1460, 160]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_atualizar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\",\n  \"p_motor\": \"motor_4_reparo\",\n  \"p_contexto\": {\n    \"etapa\": \"coletando_detalhes\",\n    \"dados_parciais\": {{ JSON.stringify($('Processar Problema').item.json) }}\n  }\n}"
+      },
+      "id": "salvar-parcial",
+      "name": "Salvar Parcial",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1680, 160]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_buscar_prestadores",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_tipo_servico\": \"{{ $('Processar Problema').item.json.tipo_profissional }}\",\n  \"p_cidade_id\": \"{{ $('Chamado pelo Maestro').item.json.usuario.cidade_id }}\"\n}"
+      },
+      "id": "buscar-prestadores",
+      "name": "Buscar Prestadores",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1460, 320]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prestadores = Array.isArray($json) ? $json : [];\nif (prestadores.length === 0) {\n  return [{ json: { texto: '😔 Não encontrei profissionais disponíveis agora.\\n\\nTente mais tarde!', encontrou: false, prestadores: [] } }];\n}\nconst tipo = $('Processar Problema').item.json.tipo_profissional || 'profissional';\nconst lista = prestadores.slice(0, 3).map((p, i) => `*${i+1}. ${p.nome}*\\n   ⭐ ${p.avaliacao_media || '5.0'} | 🔧 ${tipo}`).join('\\n\\n');\nreturn [{ json: { texto: `Encontrei estes profissionais:\\n\\n${lista}\\n\\nDigite o número da sua escolha!`, encontrou: true, prestadores } }];"
+      },
+      "id": "formatar-prestadores",
+      "name": "Formatar Prestadores",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1680, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_atualizar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\",\n  \"p_motor\": \"motor_4_reparo\",\n  \"p_contexto\": {\n    \"etapa\": \"aguardando_escolha_prestador\",\n    \"tipo_profissional\": \"{{ $('Processar Problema').item.json.tipo_profissional }}\",\n    \"descricao_problema\": \"{{ $('Processar Problema').item.json.descricao_problema }}\",\n    \"prestadores\": {{ JSON.stringify($('Formatar Prestadores').item.json.prestadores || []) }}\n  }\n}"
+      },
+      "id": "salvar-prestadores",
+      "name": "Salvar Prestadores",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1900, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"🔧 Encontrei o problema: *{{ $('Processar Problema').item.json.descricao_problema }}*\\nProfissional necessário: *{{ $('Processar Problema').item.json.tipo_profissional }}*\\n\\n{{ $('Formatar Prestadores').item.json.texto }}\"\n}"
+      },
+      "id": "msg-prestadores",
+      "name": "MSG: Lista Prestadores",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2120, 320]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 20,\n  \"system\": \"O usuário está escolhendo um profissional de uma lista numerada. Extraia apenas o número. Responda APENAS com o número (1, 2 ou 3).\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-escolha",
+      "name": "IA: Escolha Prestador",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 560]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nconst num = parseInt(resp.content?.[0]?.text?.trim() || '1') - 1;\nconst prestadores = $('Detectar Etapa').item.json.contexto.prestadores || [];\nconst escolhido = prestadores[num] || prestadores[0] || {};\nreturn [{ json: { prestador: escolhido } }];"
+      },
+      "id": "extrair-escolha",
+      "name": "Extrair Escolha",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 560]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_criar_agendamento",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_cliente_id\": \"{{ $('Chamado pelo Maestro').item.json.usuario.id }}\",\n  \"p_prestador_id\": \"{{ $('Extrair Escolha').item.json.prestador.id }}\",\n  \"p_cidade_id\": \"{{ $('Chamado pelo Maestro').item.json.usuario.cidade_id }}\",\n  \"p_motor\": \"indicacao_orcamento\",\n  \"p_tipo_servico\": \"{{ $('Detectar Etapa').item.json.contexto.tipo_profissional }}\",\n  \"p_dados\": {\n    \"descricao_problema\": \"{{ $('Detectar Etapa').item.json.contexto.descricao_problema }}\",\n    \"tipo_profissional\": \"{{ $('Detectar Etapa').item.json.contexto.tipo_profissional }}\"\n  }\n}"
+      },
+      "id": "criar-agendamento",
+      "name": "Criar Agendamento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1240, 560]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Extrair Escolha').item.json.prestador.telefone }}\",\n  \"text\": \"🔔 *Nova solicitação de orçamento via TIO*\\n\\nProblema do cliente:\\n_{{ $('Detectar Etapa').item.json.contexto.descricao_problema }}_\\n\\nDeseja fazer um orçamento?\\n\\n✅ *ACEITAR* (propor horário para visita)\\n❌ *RECUSAR*\"\n}"
+      },
+      "id": "notificar-prestador",
+      "name": "Notificar Prestador",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1460, 560]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"✅ *Solicitação enviada!*\\n\\n🔧 *{{ $('Extrair Escolha').item.json.prestador.nome }}* foi notificado e vai propor um horário para visita de orçamento.\\n\\nAssim que ele confirmar, você receberá uma notificação! 😊\"\n}"
+      },
+      "id": "msg-aguardando",
+      "name": "MSG: Aguardando",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1680, 560]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_limpar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\"\n}"
+      },
+      "id": "limpar-sessao",
+      "name": "Limpar Sessão",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1900, 560]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 300,\n  \"system\": \"O usuário está fornecendo mais detalhes sobre um problema de reparo. O contexto já coletado é: {{ JSON.stringify($('Detectar Etapa').item.json.contexto.dados_parciais || {}) }}. Com essa nova informação, reclassifique: { tipo_profissional, descricao_problema, precisa_mais_info, pergunta_adicional }. Responda APENAS o JSON.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-mais-detalhes",
+      "name": "IA: Processar Detalhes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 720]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nlet dados = {};\ntry {\n  dados = JSON.parse(resp.content?.[0]?.text?.trim() || '{}');\n} catch(e) {}\nreturn [{ json: dados }];"
+      },
+      "id": "processar-detalhes",
+      "name": "Processar Detalhes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 720]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [{ "leftValue": "={{ $json.precisa_mais_info }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-ainda-precisa",
+      "name": "Ainda Precisa Info?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1240, 720]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"{{ $('Processar Detalhes').item.json.pergunta_adicional }}\"\n}"
+      },
+      "id": "msg-mais-info2",
+      "name": "MSG: Mais Info",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1460, 640]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_buscar_prestadores",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_tipo_servico\": \"{{ $('Processar Detalhes').item.json.tipo_profissional }}\",\n  \"p_cidade_id\": \"{{ $('Chamado pelo Maestro').item.json.usuario.cidade_id }}\"\n}"
+      },
+      "id": "buscar-prestadores2",
+      "name": "Buscar Prestadores (2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1460, 800]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prestadores = Array.isArray($json) ? $json : [];\nconst tipo = $('Processar Detalhes').item.json.tipo_profissional || 'profissional';\nif (prestadores.length === 0) {\n  return [{ json: { texto: '😔 Não encontrei profissionais disponíveis.', encontrou: false, prestadores: [] } }];\n}\nconst lista = prestadores.slice(0, 3).map((p, i) => `*${i+1}. ${p.nome}*\\n   ⭐ ${p.avaliacao_media || '5.0'}`).join('\\n\\n');\nreturn [{ json: { texto: `Encontrei estes profissionais:\\n\\n${lista}\\n\\nDigite o número da sua escolha!`, encontrou: true, prestadores } }];"
+      },
+      "id": "formatar-prestadores2",
+      "name": "Formatar Prestadores (2)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1680, 800]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_atualizar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\",\n  \"p_motor\": \"motor_4_reparo\",\n  \"p_contexto\": {\n    \"etapa\": \"aguardando_escolha_prestador\",\n    \"tipo_profissional\": \"{{ $('Processar Detalhes').item.json.tipo_profissional }}\",\n    \"descricao_problema\": \"{{ $('Processar Detalhes').item.json.descricao_problema }}\",\n    \"prestadores\": {{ JSON.stringify($('Formatar Prestadores (2)').item.json.prestadores || []) }}\n  }\n}"
+      },
+      "id": "salvar-prestadores2",
+      "name": "Salvar Estado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1900, 800]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"🔧 *{{ $('Processar Detalhes').item.json.descricao_problema }}*\\n\\n{{ $('Formatar Prestadores (2)').item.json.texto }}\"\n}"
+      },
+      "id": "msg-prestadores2",
+      "name": "MSG: Prestadores (2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2120, 800]
+    }
+  ],
+  "connections": {
+    "Chamado pelo Maestro": { "main": [[{ "node": "Detectar Etapa", "type": "main", "index": 0 }]] },
+    "Detectar Etapa": { "main": [[{ "node": "Switch Etapa", "type": "main", "index": 0 }]] },
+    "Switch Etapa": {
+      "main": [
+        [{ "node": "IA: Analisar Problema", "type": "main", "index": 0 }],
+        [{ "node": "IA: Processar Detalhes", "type": "main", "index": 0 }],
+        [{ "node": "IA: Escolha Prestador", "type": "main", "index": 0 }]
+      ]
+    },
+    "IA: Analisar Problema": { "main": [[{ "node": "Processar Problema", "type": "main", "index": 0 }]] },
+    "Processar Problema": { "main": [[{ "node": "Precisa Mais Info?", "type": "main", "index": 0 }]] },
+    "Precisa Mais Info?": {
+      "main": [
+        [{ "node": "MSG: Pedir Mais Info", "type": "main", "index": 0 }],
+        [{ "node": "Buscar Prestadores", "type": "main", "index": 0 }]
+      ]
+    },
+    "MSG: Pedir Mais Info": { "main": [[{ "node": "Salvar Parcial", "type": "main", "index": 0 }]] },
+    "Buscar Prestadores": { "main": [[{ "node": "Formatar Prestadores", "type": "main", "index": 0 }]] },
+    "Formatar Prestadores": { "main": [[{ "node": "Salvar Prestadores", "type": "main", "index": 0 }]] },
+    "Salvar Prestadores": { "main": [[{ "node": "MSG: Lista Prestadores", "type": "main", "index": 0 }]] },
+    "IA: Escolha Prestador": { "main": [[{ "node": "Extrair Escolha", "type": "main", "index": 0 }]] },
+    "Extrair Escolha": { "main": [[{ "node": "Criar Agendamento", "type": "main", "index": 0 }]] },
+    "Criar Agendamento": { "main": [[{ "node": "Notificar Prestador", "type": "main", "index": 0 }]] },
+    "Notificar Prestador": { "main": [[{ "node": "MSG: Aguardando", "type": "main", "index": 0 }]] },
+    "MSG: Aguardando": { "main": [[{ "node": "Limpar Sessão", "type": "main", "index": 0 }]] },
+    "IA: Processar Detalhes": { "main": [[{ "node": "Processar Detalhes", "type": "main", "index": 0 }]] },
+    "Processar Detalhes": { "main": [[{ "node": "Ainda Precisa Info?", "type": "main", "index": 0 }]] },
+    "Ainda Precisa Info?": {
+      "main": [
+        [{ "node": "MSG: Mais Info", "type": "main", "index": 0 }],
+        [{ "node": "Buscar Prestadores (2)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Buscar Prestadores (2)": { "main": [[{ "node": "Formatar Prestadores (2)", "type": "main", "index": 0 }]] },
+    "Formatar Prestadores (2)": { "main": [[{ "node": "Salvar Estado", "type": "main", "index": 0 }]] },
+    "Salvar Estado": { "main": [[{ "node": "MSG: Prestadores (2)", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "tags": [{ "name": "TIO" }],
+  "triggerCount": 0,
+  "updatedAt": "2026-06-27T00:00:00.000Z",
+  "versionId": "07-motor4-reparo-v1"
+}

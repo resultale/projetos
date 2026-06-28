@@ -1,0 +1,375 @@
+{
+  "name": "01 TIO Maestro",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tio-maestro",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook Evolution",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [120, 400],
+      "webhookId": "tio-maestro"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "responder-200",
+      "name": "Responder 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [340, 220]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [
+            {
+              "id": "cond-bot",
+              "leftValue": "={{ $json.body.data.key.fromMe }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-bot",
+      "name": "É mensagem do bot?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [340, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body;\nconst remoteJid = body.data?.key?.remoteJid || '';\nconst telefone = remoteJid.replace('@s.whatsapp.net', '').replace('@g.us', '');\nconst pushname = body.data?.pushName || '';\nconst mensagem = body.data?.message?.conversation\n  || body.data?.message?.extendedTextMessage?.text\n  || '';\nconst instancia = body.instance || '';\nreturn [{ json: { telefone, pushname, mensagem, instancia } }];"
+      },
+      "id": "extrair-dados",
+      "name": "Extrair Dados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [560, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_atualizar_pushname",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_telefone\": \"{{ $('Extrair Dados').item.json.telefone }}\",\n  \"p_pushname\": \"{{ $('Extrair Dados').item.json.pushname }}\"\n}"
+      },
+      "id": "atualizar-pushname",
+      "name": "Atualizar Pushname",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [780, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_obter_usuario",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_telefone\": \"{{ $('Extrair Dados').item.json.telefone }}\"\n}"
+      },
+      "id": "buscar-usuario",
+      "name": "Buscar Usuário",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [
+            {
+              "id": "cond-encontrado",
+              "leftValue": "={{ $json.encontrado }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-usuario-existe",
+      "name": "Usuário Existe?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1220, 400]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.N8N_WORKFLOW_ONBOARDING }}",
+        "options": {}
+      },
+      "id": "subflow-onboarding",
+      "name": "Subworkflow: Onboarding",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1440, 540]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [
+            {
+              "id": "cond-bloqueado",
+              "leftValue": "={{ $json.bloqueado }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-bloqueado",
+      "name": "Bloqueado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1440, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Extrair Dados').item.json.telefone }}\",\n  \"text\": \"⛔ Sua conta está bloqueada. Entre em contato com o suporte.\"\n}"
+      },
+      "id": "msg-bloqueado",
+      "name": "MSG: Conta Bloqueada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1660, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_obter_ou_criar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_usuario_id\": \"{{ $('Buscar Usuário').item.json.id }}\"\n}"
+      },
+      "id": "obter-sessao",
+      "name": "Obter Sessão",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1660, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sessao = $('Obter Sessão').item.json;\nconst usuario = $('Buscar Usuário').item.json;\nconst msg = $('Extrair Dados').item.json.mensagem.toLowerCase().trim();\n\n// Se há motor em andamento, continuar nele\nif (sessao.motor_atual) {\n  return [{ json: {\n    intent: sessao.motor_atual,\n    usuario,\n    sessao,\n    mensagem: $('Extrair Dados').item.json.mensagem,\n    telefone: $('Extrair Dados').item.json.telefone,\n    sessao_id: sessao.id,\n    sessao_contexto: sessao.contexto\n  } }];\n}\n\n// Menu numerado: 1-6\nconst menuMap = {\n  '1': 'motor_1_corrida',\n  '2': 'motor_1_entrega',\n  '3': 'motor_2_carona',\n  '4': 'motor_3_servico',\n  '5': 'motor_4_reparo',\n  '6': 'motor_5_delivery'\n};\nif (menuMap[msg]) {\n  return [{ json: {\n    intent: menuMap[msg],\n    usuario, sessao,\n    mensagem: $('Extrair Dados').item.json.mensagem,\n    telefone: $('Extrair Dados').item.json.telefone,\n    sessao_id: sessao.id,\n    sessao_contexto: sessao.contexto\n  } }];\n}\n\n// Palavras-chave como atalho\nlet intent = 'menu_principal';\nif (/\\b(moto|corrida|carro|uber|taxi|motorista|me leva)\\b/.test(msg)) intent = 'motor_1_corrida';\nelse if (/\\b(entrega|entregar|motoboy|pacote|levar|enviar)\\b/.test(msg)) intent = 'motor_1_entrega';\nelse if (/\\b(carona|compartilh|viagem|passageiro)\\b/.test(msg)) intent = 'motor_2_carona';\nelse if (/\\b(cortar|barbearia|cabelo|sal[aã]o|manicure|massagem|est[eé]tica)\\b/.test(msg)) intent = 'motor_3_servico';\nelse if (/\\b(encanador|eletricista|reparo|consert|pintor|chuveiro|vazamento)\\b/.test(msg)) intent = 'motor_4_reparo';\nelse if (/\\b(pizza|hamburguer|comida|delivery|lanche|restaurante|fome|pedir)\\b/.test(msg)) intent = 'motor_5_delivery';\n\nreturn [{ json: {\n  intent,\n  usuario, sessao,\n  mensagem: $('Extrair Dados').item.json.mensagem,\n  telefone: $('Extrair Dados').item.json.telefone,\n  sessao_id: sessao.id,\n  sessao_contexto: sessao.contexto\n} }];"
+      },
+      "id": "detectar-intent",
+      "name": "Detectar Intenção",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1880, 400]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.intent }}", "rightValue": "motor_1_corrida", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "corrida" },
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.intent }}", "rightValue": "motor_1_entrega", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "entrega" },
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.intent }}", "rightValue": "motor_2_carona", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "carona" },
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.intent }}", "rightValue": "motor_3_servico", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "servico" },
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.intent }}", "rightValue": "motor_4_reparo", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "reparo" },
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.intent }}", "rightValue": "motor_5_delivery", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "delivery" }
+          ]
+        },
+        "options": { "fallbackOutput": "extra" }
+      },
+      "id": "rotear-motor",
+      "name": "Rotear Motor",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [2100, 400]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.N8N_WORKFLOW_CORRIDA }}",
+        "options": {}
+      },
+      "id": "sub-corrida",
+      "name": "Motor 1A: Corrida",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [2320, 140]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.N8N_WORKFLOW_ENTREGA }}",
+        "options": {}
+      },
+      "id": "sub-entrega",
+      "name": "Motor 1B: Entrega",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [2320, 280]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.N8N_WORKFLOW_CARONA }}",
+        "options": {}
+      },
+      "id": "sub-carona",
+      "name": "Motor 2: Carona",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [2320, 420]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.N8N_WORKFLOW_SERVICO }}",
+        "options": {}
+      },
+      "id": "sub-servico",
+      "name": "Motor 3: Serviço",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [2320, 560]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.N8N_WORKFLOW_REPARO }}",
+        "options": {}
+      },
+      "id": "sub-reparo",
+      "name": "Motor 4: Reparo",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [2320, 700]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.N8N_WORKFLOW_DELIVERY }}",
+        "options": {}
+      },
+      "id": "sub-delivery",
+      "name": "Motor 5: Delivery",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [2320, 840]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Extrair Dados').item.json.telefone }}\",\n  \"text\": \"Olá, {{ $('Buscar Usuário').item.json.nome }}! 👋\\n\\nO que posso fazer por você?\\n\\n🏍️ *1* - Corrida ou moto\\n📦 *2* - Entrega\\n🚗 *3* - Carona compartilhada\\n✂️ *4* - Serviço (barbearia, salão...)\\n🔧 *5* - Reparo (encanador, eletricista...)\\n🍕 *6* - Delivery\\n\\nDigite o número!\"\n}"
+      },
+      "id": "msg-menu",
+      "name": "MSG: Menu Principal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2320, 980]
+    }
+  ],
+  "connections": {
+    "Webhook Evolution": {
+      "main": [[
+        { "node": "Responder 200", "type": "main", "index": 0 },
+        { "node": "É mensagem do bot?", "type": "main", "index": 0 }
+      ]]
+    },
+    "É mensagem do bot?": {
+      "main": [
+        [],
+        [{ "node": "Extrair Dados", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extrair Dados": {
+      "main": [[{ "node": "Atualizar Pushname", "type": "main", "index": 0 }]]
+    },
+    "Atualizar Pushname": {
+      "main": [[{ "node": "Buscar Usuário", "type": "main", "index": 0 }]]
+    },
+    "Buscar Usuário": {
+      "main": [[{ "node": "Usuário Existe?", "type": "main", "index": 0 }]]
+    },
+    "Usuário Existe?": {
+      "main": [
+        [{ "node": "Bloqueado?", "type": "main", "index": 0 }],
+        [{ "node": "Subworkflow: Onboarding", "type": "main", "index": 0 }]
+      ]
+    },
+    "Bloqueado?": {
+      "main": [
+        [{ "node": "MSG: Conta Bloqueada", "type": "main", "index": 0 }],
+        [{ "node": "Obter Sessão", "type": "main", "index": 0 }]
+      ]
+    },
+    "Obter Sessão": {
+      "main": [[{ "node": "Detectar Intenção", "type": "main", "index": 0 }]]
+    },
+    "Detectar Intenção": {
+      "main": [[{ "node": "Rotear Motor", "type": "main", "index": 0 }]]
+    },
+    "Rotear Motor": {
+      "main": [
+        [{ "node": "Motor 1A: Corrida", "type": "main", "index": 0 }],
+        [{ "node": "Motor 1B: Entrega", "type": "main", "index": 0 }],
+        [{ "node": "Motor 2: Carona", "type": "main", "index": 0 }],
+        [{ "node": "Motor 3: Serviço", "type": "main", "index": 0 }],
+        [{ "node": "Motor 4: Reparo", "type": "main", "index": 0 }],
+        [{ "node": "Motor 5: Delivery", "type": "main", "index": 0 }],
+        [{ "node": "MSG: Menu Principal", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "tags": [{ "name": "TIO" }],
+  "triggerCount": 0,
+  "updatedAt": "2026-06-27T00:00:00.000Z",
+  "versionId": "01-maestro-v3-native"
+}

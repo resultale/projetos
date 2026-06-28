@@ -1,0 +1,384 @@
+{
+  "name": "05 TIO Motor 2 - Carona Compartilhada",
+  "nodes": [
+    {
+      "parameters": { "inputDataFieldName": "body" },
+      "id": "trigger",
+      "name": "Chamado pelo Maestro",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [120, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $json;\nconst ctx = d.sessao_contexto || {};\nconst etapa = ctx.etapa || 'inicio';\nreturn [{ json: { etapa, mensagem: d.mensagem, dados: d, contexto: ctx } }];"
+      },
+      "id": "detectar-etapa",
+      "name": "Detectar Etapa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [340, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 20,\n  \"system\": \"O usuário quer usar carona compartilhada. Identifique se ele quer PUBLICAR uma carona (é motorista oferecendo) ou BUSCAR uma carona (é passageiro procurando). Responda APENAS: 'publicar' ou 'buscar'.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-publicar-buscar",
+      "name": "IA: Publicar ou Buscar?",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [560, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nconst modo = resp.content?.[0]?.text?.trim().toLowerCase() || 'buscar';\nreturn [{ json: { modo } }];"
+      },
+      "id": "extrair-modo",
+      "name": "Extrair Modo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [780, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [{ "leftValue": "={{ $json.modo }}", "rightValue": "publicar", "operator": { "type": "string", "operation": "equals" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-publicar",
+      "name": "Publicar ou Buscar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 400]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 300,\n  \"system\": \"O usuário é motorista e quer publicar uma carona. Extraia as informações da mensagem e responda em JSON: { destino, data, hora, vagas, valor }. Se algum campo não foi mencionado, coloque null. Responda APENAS o JSON.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-extrair-carona",
+      "name": "IA: Extrair Dados Carona",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1220, 260]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nlet dados = {};\ntry {\n  const texto = resp.content?.[0]?.text?.trim() || '{}';\n  dados = JSON.parse(texto);\n} catch(e) {\n  dados = {};\n}\nconst completo = dados.destino && dados.data && dados.hora && dados.vagas && dados.valor;\nreturn [{ json: { ...dados, completo: !!completo } }];"
+      },
+      "id": "processar-carona",
+      "name": "Processar Dados Carona",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1440, 260]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [{ "leftValue": "={{ $json.completo }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-dados-completos",
+      "name": "Dados Completos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1660, 260]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"Para publicar sua carona preciso de mais detalhes:\\n\\n{{ !$('Processar Dados Carona').item.json.destino ? '📍 Qual é o *destino*?\\n' : '' }}{{ !$('Processar Dados Carona').item.json.data ? '📅 Qual é a *data* da viagem?\\n' : '' }}{{ !$('Processar Dados Carona').item.json.hora ? '🕐 Qual é o *horário* de saída?\\n' : '' }}{{ !$('Processar Dados Carona').item.json.vagas ? '💺 Quantas *vagas* disponíveis?\\n' : '' }}{{ !$('Processar Dados Carona').item.json.valor ? '💰 Qual o *valor* por passageiro?' : '' }}\"\n}"
+      },
+      "id": "msg-pedir-detalhes",
+      "name": "MSG: Pedir Detalhes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1880, 160]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_atualizar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\",\n  \"p_motor\": \"motor_2_carona\",\n  \"p_contexto\": {\n    \"etapa\": \"aguardando_detalhes_publicar\",\n    \"modo\": \"publicar\",\n    \"dados_parciais\": {{ JSON.stringify($('Processar Dados Carona').item.json) }}\n  }\n}"
+      },
+      "id": "salvar-parcial",
+      "name": "Salvar Dados Parciais",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2100, 160]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_publicar_carona",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_motorista_id\": \"{{ $('Chamado pelo Maestro').item.json.usuario.id }}\",\n  \"p_cidade_id\": \"{{ $('Chamado pelo Maestro').item.json.usuario.cidade_id }}\",\n  \"p_origem\": \"{{ $('Chamado pelo Maestro').item.json.usuario.cidade_nome }}\",\n  \"p_destino\": \"{{ $('Processar Dados Carona').item.json.destino }}\",\n  \"p_data_hora\": \"{{ $('Processar Dados Carona').item.json.data + ' ' + $('Processar Dados Carona').item.json.hora }}\",\n  \"p_total_vagas\": {{ $('Processar Dados Carona').item.json.vagas }},\n  \"p_valor_total\": {{ $('Processar Dados Carona').item.json.valor }}\n}"
+      },
+      "id": "publicar-carona",
+      "name": "Publicar Carona",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1880, 360]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"✅ *Carona publicada!*\\n\\n🚗 {{ $('Processar Dados Carona').item.json.destino }}\\n📅 {{ $('Processar Dados Carona').item.json.data }} às {{ $('Processar Dados Carona').item.json.hora }}\\n💺 {{ $('Processar Dados Carona').item.json.vagas }} vagas\\n💰 R$ {{ $('Processar Dados Carona').item.json.valor }}/passageiro\\n\\nPassageiros interessados entrarão em contato!\"\n}"
+      },
+      "id": "msg-carona-publicada",
+      "name": "MSG: Carona Publicada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2100, 360]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 200,\n  \"system\": \"O usuário quer buscar uma carona compartilhada. Extraia as informações e responda em JSON: { destino, data }. Data pode ser relativa como 'hoje', 'amanhã', 'sexta'. Se não informado coloque null. Responda APENAS o JSON.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-buscar-carona",
+      "name": "IA: Extrair Busca Carona",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1220, 560]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nlet dados = {};\ntry {\n  dados = JSON.parse(resp.content?.[0]?.text?.trim() || '{}');\n} catch(e) {}\nreturn [{ json: dados }];"
+      },
+      "id": "processar-busca",
+      "name": "Processar Busca",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1440, 560]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [{ "leftValue": "={{ $json.destino }}", "rightValue": "", "operator": { "type": "string", "operation": "notEquals" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-tem-destino",
+      "name": "Tem Destino?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1660, 560]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"Para buscar uma carona, me diz:\\n\\n📍 Qual é o *destino*?\\n📅 Para qual *data*?\"\n}"
+      },
+      "id": "msg-pedir-busca",
+      "name": "MSG: Pedir Destino Busca",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1880, 460]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_buscar_caronas",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_cidade_id\": \"{{ $('Chamado pelo Maestro').item.json.usuario.cidade_id }}\",\n  \"p_destino\": \"{{ $('Processar Busca').item.json.destino }}\",\n  \"p_data\": \"{{ $('Processar Busca').item.json.data || '' }}\"\n}"
+      },
+      "id": "buscar-caronas",
+      "name": "Buscar Caronas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1880, 660]
+    },
+    {
+      "parameters": {
+        "jsCode": "const caronas = Array.isArray($json) ? $json : [];\nif (caronas.length === 0) {\n  return [{ json: { texto: '😔 Não encontrei caronas disponíveis para esse destino.\\n\\nTente outro destino ou data, ou publique sua própria carona!', encontrou: false } }];\n}\nconst lista = caronas.slice(0, 5).map((c, i) => `${i+1}. 🚗 ${c.motorista_nome} → ${c.destino}\\n   📅 ${c.data_hora}\\n   💺 ${c.vagas_disponiveis} vagas | 💰 R$ ${c.valor_por_vaga}/vaga`).join('\\n\\n');\nreturn [{ json: { texto: `Encontrei estas caronas:\\n\\n${lista}\\n\\nDigite o número da carona que deseja!`, encontrou: true, caronas } }];"
+      },
+      "id": "formatar-caronas",
+      "name": "Formatar Caronas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2100, 660]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"{{ $('Formatar Caronas').item.json.texto }}\"\n}"
+      },
+      "id": "msg-caronas",
+      "name": "MSG: Lista Caronas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2320, 660]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_limpar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\"\n}"
+      },
+      "id": "limpar-sessao",
+      "name": "Limpar Sessão",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2540, 660]
+    }
+  ],
+  "connections": {
+    "Chamado pelo Maestro": { "main": [[{ "node": "Detectar Etapa", "type": "main", "index": 0 }]] },
+    "Detectar Etapa": { "main": [[{ "node": "IA: Publicar ou Buscar?", "type": "main", "index": 0 }]] },
+    "IA: Publicar ou Buscar?": { "main": [[{ "node": "Extrair Modo", "type": "main", "index": 0 }]] },
+    "Extrair Modo": { "main": [[{ "node": "Publicar ou Buscar?", "type": "main", "index": 0 }]] },
+    "Publicar ou Buscar?": {
+      "main": [
+        [{ "node": "IA: Extrair Dados Carona", "type": "main", "index": 0 }],
+        [{ "node": "IA: Extrair Busca Carona", "type": "main", "index": 0 }]
+      ]
+    },
+    "IA: Extrair Dados Carona": { "main": [[{ "node": "Processar Dados Carona", "type": "main", "index": 0 }]] },
+    "Processar Dados Carona": { "main": [[{ "node": "Dados Completos?", "type": "main", "index": 0 }]] },
+    "Dados Completos?": {
+      "main": [
+        [{ "node": "Publicar Carona", "type": "main", "index": 0 }],
+        [{ "node": "MSG: Pedir Detalhes", "type": "main", "index": 0 }]
+      ]
+    },
+    "MSG: Pedir Detalhes": { "main": [[{ "node": "Salvar Dados Parciais", "type": "main", "index": 0 }]] },
+    "Publicar Carona": { "main": [[{ "node": "MSG: Carona Publicada", "type": "main", "index": 0 }]] },
+    "IA: Extrair Busca Carona": { "main": [[{ "node": "Processar Busca", "type": "main", "index": 0 }]] },
+    "Processar Busca": { "main": [[{ "node": "Tem Destino?", "type": "main", "index": 0 }]] },
+    "Tem Destino?": {
+      "main": [
+        [{ "node": "Buscar Caronas", "type": "main", "index": 0 }],
+        [{ "node": "MSG: Pedir Destino Busca", "type": "main", "index": 0 }]
+      ]
+    },
+    "Buscar Caronas": { "main": [[{ "node": "Formatar Caronas", "type": "main", "index": 0 }]] },
+    "Formatar Caronas": { "main": [[{ "node": "MSG: Lista Caronas", "type": "main", "index": 0 }]] },
+    "MSG: Lista Caronas": { "main": [[{ "node": "Limpar Sessão", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "tags": [{ "name": "TIO" }],
+  "triggerCount": 0,
+  "updatedAt": "2026-06-27T00:00:00.000Z",
+  "versionId": "05-motor2-carona-v1"
+}

@@ -1,0 +1,598 @@
+{
+  "name": "03 TIO Motor 1A - Corrida",
+  "nodes": [
+    {
+      "parameters": { "inputDataFieldName": "body" },
+      "id": "trigger",
+      "name": "Chamado pelo Maestro",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [120, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $json;\nconst ctx = d.sessao_contexto || {};\nconst etapa = ctx.etapa || 'inicio';\nreturn [{ json: { etapa, mensagem: d.mensagem, dados: d, contexto: ctx } }];"
+      },
+      "id": "detectar-etapa",
+      "name": "Detectar Etapa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [340, 400]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.etapa }}", "rightValue": "inicio", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "inicio" },
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.etapa }}", "rightValue": "aguardando_veiculo", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "aguardando_veiculo" },
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.etapa }}", "rightValue": "aguardando_origem", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "aguardando_origem" },
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.etapa }}", "rightValue": "aguardando_destino", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "aguardando_destino" }
+          ]
+        },
+        "options": { "fallbackOutput": "extra" }
+      },
+      "id": "switch-etapa",
+      "name": "Switch Etapa",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [560, 400]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 50,\n  \"system\": \"O usuário quer solicitar uma corrida. Identifique o tipo de veículo mencionado na mensagem. Responda APENAS com uma palavra: 'moto', 'economico', 'confort' ou 'premium'. Se não identificar, responda 'moto' como padrão.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-tipo-veiculo-inicio",
+      "name": "IA: Detectar Veículo (início)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nconst veiculo = resp.content?.[0]?.text?.trim().toLowerCase() || 'moto';\nreturn [{ json: { veiculo_detectado: veiculo } }];"
+      },
+      "id": "extrair-veiculo",
+      "name": "Extrair Veículo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_atualizar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\",\n  \"p_motor\": \"motor_1_corrida\",\n  \"p_contexto\": { \"etapa\": \"aguardando_origem\", \"veiculo\": \"{{ $('Extrair Veículo').item.json.veiculo_detectado }}\" }\n}"
+      },
+      "id": "salvar-veiculo",
+      "name": "Salvar Veículo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1240, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"Ótimo! 🏍️ {{ $('Extrair Veículo').item.json.veiculo_detectado === 'moto' ? 'Moto' : $('Extrair Veículo').item.json.veiculo_detectado }} selecionado.\\n\\nQual é o endereço de *origem* (de onde você está saindo)?\\n\\n_Dica: pode dizer 'de casa' para usar seu endereço cadastrado_\"\n}"
+      },
+      "id": "msg-pedir-origem",
+      "name": "MSG: Pedir Origem",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1460, 240]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 100,\n  \"system\": \"O usuário está informando um endereço de origem para uma corrida. Se ele disser 'de casa', 'aqui', 'minha casa' ou similar, responda 'USAR_CASA'. Caso contrário, extraia o endereço mencionado e responda apenas com o endereço limpo.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-origem",
+      "name": "IA: Extrair Origem",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nconst origem_texto = resp.content?.[0]?.text?.trim() || '';\nconst usar_casa = origem_texto === 'USAR_CASA';\nconst ctx = $('Detectar Etapa').item.json.contexto;\nlet lat_origem = null;\nlet lng_origem = null;\nlet endereco_origem = origem_texto;\nif (usar_casa) {\n  const usuario = $('Chamado pelo Maestro').item.json.usuario || {};\n  const end_principal = (usuario.enderecos || []).find(e => e.principal) || (usuario.enderecos || [])[0] || {};\n  lat_origem = end_principal.latitude;\n  lng_origem = end_principal.longitude;\n  endereco_origem = end_principal.endereco || 'Casa';\n}\nreturn [{ json: { usar_casa, origem_texto: endereco_origem, lat_origem, lng_origem } }];"
+      },
+      "id": "processar-origem",
+      "name": "Processar Origem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [{ "leftValue": "={{ $json.usar_casa }}", "rightValue": false, "operator": { "type": "boolean", "operation": "equals" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-geocode-origem",
+      "name": "Precisa Geocodificar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1240, 400]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://maps.googleapis.com/maps/api/geocode/json",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "address", "value": "={{ $('Processar Origem').item.json.origem_texto + ', ' + $('Chamado pelo Maestro').item.json.usuario.cidade_nome + ', Brasil' }}" },
+            { "name": "key", "value": "={{ $env.GOOGLE_MAPS_API_KEY }}" }
+          ]
+        }
+      },
+      "id": "geocode-origem",
+      "name": "Geocodificar Origem",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1460, 320]
+    },
+    {
+      "parameters": {
+        "jsCode": "const geo = $json;\nconst result = geo.results?.[0];\nif (!result) return [{ json: { lat: null, lng: null, endereco: '' } }];\nreturn [{ json: { lat: result.geometry.location.lat, lng: result.geometry.location.lng, endereco: result.formatted_address } }];"
+      },
+      "id": "extrair-coords-origem",
+      "name": "Coordenadas Origem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1680, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_atualizar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\",\n  \"p_motor\": \"motor_1_corrida\",\n  \"p_contexto\": {\n    \"etapa\": \"aguardando_destino\",\n    \"veiculo\": \"{{ $('Detectar Etapa').item.json.contexto.veiculo }}\",\n    \"origem\": \"{{ $('Processar Origem').item.json.usar_casa ? $('Processar Origem').item.json.origem_texto : $('Coordenadas Origem').item.json.endereco }}\",\n    \"lat_origem\": {{ $('Processar Origem').item.json.usar_casa ? $('Processar Origem').item.json.lat_origem : $('Coordenadas Origem').item.json.lat }},\n    \"lng_origem\": {{ $('Processar Origem').item.json.usar_casa ? $('Processar Origem').item.json.lng_origem : $('Coordenadas Origem').item.json.lng }}\n  }\n}"
+      },
+      "id": "salvar-origem",
+      "name": "Salvar Origem",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1900, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"📍 Origem anotada! Agora me diz o *destino* (para onde você vai):\"\n}"
+      },
+      "id": "msg-pedir-destino",
+      "name": "MSG: Pedir Destino",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2120, 400]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 100,\n  \"system\": \"O usuário está informando um endereço de destino para uma corrida. Extraia o endereço de destino da mensagem. Responda apenas com o endereço limpo.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-destino",
+      "name": "IA: Extrair Destino",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 560]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nconst destino = resp.content?.[0]?.text?.trim() || '';\nreturn [{ json: { destino_texto: destino } }];"
+      },
+      "id": "extrair-destino",
+      "name": "Extrair Destino",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 560]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://maps.googleapis.com/maps/api/geocode/json",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "address", "value": "={{ $json.destino_texto + ', ' + $('Chamado pelo Maestro').item.json.usuario.cidade_nome + ', Brasil' }}" },
+            { "name": "key", "value": "={{ $env.GOOGLE_MAPS_API_KEY }}" }
+          ]
+        }
+      },
+      "id": "geocode-destino",
+      "name": "Geocodificar Destino",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1240, 560]
+    },
+    {
+      "parameters": {
+        "jsCode": "const geo = $json;\nconst result = geo.results?.[0];\nif (!result) return [{ json: { lat: null, lng: null, endereco: '' } }];\nreturn [{ json: { lat: result.geometry.location.lat, lng: result.geometry.location.lng, endereco: result.formatted_address } }];"
+      },
+      "id": "coords-destino",
+      "name": "Coordenadas Destino",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1460, 560]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://maps.googleapis.com/maps/api/directions/json",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "origin", "value": "={{ $('Detectar Etapa').item.json.contexto.lat_origem + ',' + $('Detectar Etapa').item.json.contexto.lng_origem }}" },
+            { "name": "destination", "value": "={{ $('Coordenadas Destino').item.json.lat + ',' + $('Coordenadas Destino').item.json.lng }}" },
+            { "name": "key", "value": "={{ $env.GOOGLE_MAPS_API_KEY }}" }
+          ]
+        }
+      },
+      "id": "directions",
+      "name": "Calcular Rota",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1680, 560]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $json;\nconst leg = d.routes?.[0]?.legs?.[0];\nconst distancia_m = leg?.distance?.value || 0;\nconst distancia_km = Math.round(distancia_m / 100) / 10;\nconst tempo_min = Math.round((leg?.duration?.value || 0) / 60);\nreturn [{ json: { distancia_km, tempo_min } }];"
+      },
+      "id": "extrair-rota",
+      "name": "Extrair Rota",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1900, 560]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_calcular_tarifa",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_motor\": \"aceite_direto\",\n  \"p_tipo_servico\": \"corrida_{{ $('Detectar Etapa').item.json.contexto.veiculo }}\",\n  \"p_distancia_km\": {{ $('Extrair Rota').item.json.distancia_km }},\n  \"p_cidade_id\": \"{{ $('Chamado pelo Maestro').item.json.usuario.cidade_id }}\"\n}"
+      },
+      "id": "calcular-tarifa",
+      "name": "Calcular Tarifa",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2120, 560]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_atualizar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\",\n  \"p_motor\": \"motor_1_corrida\",\n  \"p_contexto\": {\n    \"etapa\": \"aguardando_pagamento\",\n    \"veiculo\": \"{{ $('Detectar Etapa').item.json.contexto.veiculo }}\",\n    \"origem\": \"{{ $('Detectar Etapa').item.json.contexto.origem }}\",\n    \"lat_origem\": {{ $('Detectar Etapa').item.json.contexto.lat_origem }},\n    \"lng_origem\": {{ $('Detectar Etapa').item.json.contexto.lng_origem }},\n    \"destino\": \"{{ $('Coordenadas Destino').item.json.endereco }}\",\n    \"lat_destino\": {{ $('Coordenadas Destino').item.json.lat }},\n    \"lng_destino\": {{ $('Coordenadas Destino').item.json.lng }},\n    \"distancia_km\": {{ $('Extrair Rota').item.json.distancia_km }},\n    \"tempo_min\": {{ $('Extrair Rota').item.json.tempo_min }},\n    \"valor\": {{ $('Calcular Tarifa').item.json.valor }}\n  }\n}"
+      },
+      "id": "salvar-corrida",
+      "name": "Salvar Corrida",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2340, 560]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"📋 *Resumo da corrida:*\\n\\n📍 Origem: {{ $('Detectar Etapa').item.json.contexto.origem }}\\n🏁 Destino: {{ $('Coordenadas Destino').item.json.endereco }}\\n📏 Distância: {{ $('Extrair Rota').item.json.distancia_km }} km\\n⏱️ Tempo estimado: {{ $('Extrair Rota').item.json.tempo_min }} min\\n💰 Valor: R$ {{ $('Calcular Tarifa').item.json.valor.toFixed(2) }}\\n\\nComo deseja pagar?\\n\\n💳 *1* - PIX (receba cashback!)\\n💵 *2* - Dinheiro\\n💳 *3* - Cartão na hora\"\n}"
+      },
+      "id": "msg-resumo",
+      "name": "MSG: Resumo e Pagamento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2560, 560]
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 20,\n  \"system\": \"O usuário está escolhendo forma de pagamento. Responda APENAS: 'pix', 'dinheiro' ou 'cartao'.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"{{ $('Detectar Etapa').item.json.mensagem }}\" }]\n}"
+      },
+      "id": "ia-pagamento",
+      "name": "IA: Forma Pagamento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 720]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $json;\nconst forma = resp.content?.[0]?.text?.trim().toLowerCase() || 'dinheiro';\nreturn [{ json: { forma_pagamento: forma } }];"
+      },
+      "id": "extrair-pagamento",
+      "name": "Extrair Pagamento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 720]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [{ "leftValue": "={{ $json.forma_pagamento }}", "rightValue": "pix", "operator": { "type": "string", "operation": "equals" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-pix",
+      "name": "É PIX?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1240, 720]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ASAAS_BASE_URL }}/payments",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "access_token", "value": "={{ $env.ASAAS_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"billingType\": \"PIX\",\n  \"customer\": \"{{ $('Chamado pelo Maestro').item.json.usuario.asaas_customer_id }}\",\n  \"value\": {{ $('Detectar Etapa').item.json.contexto.valor }},\n  \"dueDate\": \"{{ new Date(Date.now() + 30*60000).toISOString().split('T')[0] }}\",\n  \"description\": \"Corrida TIO\",\n  \"externalReference\": \"pendente\"\n}"
+      },
+      "id": "criar-pix",
+      "name": "Criar PIX Asaas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1460, 640]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_criar_solicitacao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_usuario_id\": \"{{ $('Chamado pelo Maestro').item.json.usuario.id }}\",\n  \"p_tipo_usuario\": \"cliente\",\n  \"p_cidade_id\": \"{{ $('Chamado pelo Maestro').item.json.usuario.cidade_id }}\",\n  \"p_motor\": \"aceite_direto\",\n  \"p_tipo_servico\": \"corrida_{{ $('Detectar Etapa').item.json.contexto.veiculo }}\",\n  \"p_dados\": {\n    \"origem\": \"{{ $('Detectar Etapa').item.json.contexto.origem }}\",\n    \"destino\": \"{{ $('Detectar Etapa').item.json.contexto.destino }}\",\n    \"lat_origem\": {{ $('Detectar Etapa').item.json.contexto.lat_origem }},\n    \"lng_origem\": {{ $('Detectar Etapa').item.json.contexto.lng_origem }},\n    \"lat_destino\": {{ $('Detectar Etapa').item.json.contexto.lat_destino }},\n    \"lng_destino\": {{ $('Detectar Etapa').item.json.contexto.lng_destino }},\n    \"distancia_km\": {{ $('Detectar Etapa').item.json.contexto.distancia_km }},\n    \"tempo_min\": {{ $('Detectar Etapa').item.json.contexto.tempo_min }},\n    \"valor\": {{ $('Detectar Etapa').item.json.contexto.valor }},\n    \"forma_pagamento\": \"{{ $('Extrair Pagamento').item.json.forma_pagamento }}\",\n    \"pix_id_asaas\": \"{{ $('Criar PIX Asaas').item.json.id || '' }}\"\n  },\n  \"p_minutos_expiracao\": 15\n}"
+      },
+      "id": "criar-solicitacao",
+      "name": "Criar Solicitação",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1680, 720]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_buscar_executores_proximos",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_tipo_servico\": \"corrida_{{ $('Detectar Etapa').item.json.contexto.veiculo }}\",\n  \"p_cidade_id\": \"{{ $('Chamado pelo Maestro').item.json.usuario.cidade_id }}\",\n  \"p_latitude\": {{ $('Detectar Etapa').item.json.contexto.lat_origem }},\n  \"p_longitude\": {{ $('Detectar Etapa').item.json.contexto.lng_origem }},\n  \"p_raio_km\": 5,\n  \"p_limite\": 10\n}"
+      },
+      "id": "buscar-motoristas",
+      "name": "Buscar Motoristas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1900, 720]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_API_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Chamado pelo Maestro').item.json.telefone }}\",\n  \"text\": \"🔍 Procurando motoristas próximos...\\n\\nVocê receberá uma notificação quando um motorista aceitar sua corrida! 🏍️\"\n}"
+      },
+      "id": "msg-procurando",
+      "name": "MSG: Procurando Motoristas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2120, 720]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/rpc_limpar_sessao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_sessao_id\": \"{{ $('Chamado pelo Maestro').item.json.sessao_id }}\"\n}"
+      },
+      "id": "limpar-sessao",
+      "name": "Limpar Sessão",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2340, 720]
+    }
+  ],
+  "connections": {
+    "Chamado pelo Maestro": { "main": [[{ "node": "Detectar Etapa", "type": "main", "index": 0 }]] },
+    "Detectar Etapa": { "main": [[{ "node": "Switch Etapa", "type": "main", "index": 0 }]] },
+    "Switch Etapa": {
+      "main": [
+        [{ "node": "IA: Detectar Veículo (início)", "type": "main", "index": 0 }],
+        [],
+        [{ "node": "IA: Extrair Origem", "type": "main", "index": 0 }],
+        [{ "node": "IA: Extrair Destino", "type": "main", "index": 0 }],
+        [{ "node": "IA: Forma Pagamento", "type": "main", "index": 0 }]
+      ]
+    },
+    "IA: Detectar Veículo (início)": { "main": [[{ "node": "Extrair Veículo", "type": "main", "index": 0 }]] },
+    "Extrair Veículo": { "main": [[{ "node": "Salvar Veículo", "type": "main", "index": 0 }]] },
+    "Salvar Veículo": { "main": [[{ "node": "MSG: Pedir Origem", "type": "main", "index": 0 }]] },
+    "IA: Extrair Origem": { "main": [[{ "node": "Processar Origem", "type": "main", "index": 0 }]] },
+    "Processar Origem": { "main": [[{ "node": "Precisa Geocodificar?", "type": "main", "index": 0 }]] },
+    "Precisa Geocodificar?": {
+      "main": [
+        [{ "node": "Geocodificar Origem", "type": "main", "index": 0 }],
+        [{ "node": "Salvar Origem", "type": "main", "index": 0 }]
+      ]
+    },
+    "Geocodificar Origem": { "main": [[{ "node": "Coordenadas Origem", "type": "main", "index": 0 }]] },
+    "Coordenadas Origem": { "main": [[{ "node": "Salvar Origem", "type": "main", "index": 0 }]] },
+    "Salvar Origem": { "main": [[{ "node": "MSG: Pedir Destino", "type": "main", "index": 0 }]] },
+    "IA: Extrair Destino": { "main": [[{ "node": "Extrair Destino", "type": "main", "index": 0 }]] },
+    "Extrair Destino": { "main": [[{ "node": "Geocodificar Destino", "type": "main", "index": 0 }]] },
+    "Geocodificar Destino": { "main": [[{ "node": "Coordenadas Destino", "type": "main", "index": 0 }]] },
+    "Coordenadas Destino": { "main": [[{ "node": "Calcular Rota", "type": "main", "index": 0 }]] },
+    "Calcular Rota": { "main": [[{ "node": "Extrair Rota", "type": "main", "index": 0 }]] },
+    "Extrair Rota": { "main": [[{ "node": "Calcular Tarifa", "type": "main", "index": 0 }]] },
+    "Calcular Tarifa": { "main": [[{ "node": "Salvar Corrida", "type": "main", "index": 0 }]] },
+    "Salvar Corrida": { "main": [[{ "node": "MSG: Resumo e Pagamento", "type": "main", "index": 0 }]] },
+    "IA: Forma Pagamento": { "main": [[{ "node": "Extrair Pagamento", "type": "main", "index": 0 }]] },
+    "Extrair Pagamento": { "main": [[{ "node": "É PIX?", "type": "main", "index": 0 }]] },
+    "É PIX?": {
+      "main": [
+        [{ "node": "Criar PIX Asaas", "type": "main", "index": 0 }],
+        [{ "node": "Criar Solicitação", "type": "main", "index": 0 }]
+      ]
+    },
+    "Criar PIX Asaas": { "main": [[{ "node": "Criar Solicitação", "type": "main", "index": 0 }]] },
+    "Criar Solicitação": { "main": [[{ "node": "Buscar Motoristas", "type": "main", "index": 0 }]] },
+    "Buscar Motoristas": { "main": [[{ "node": "MSG: Procurando Motoristas", "type": "main", "index": 0 }]] },
+    "MSG: Procurando Motoristas": { "main": [[{ "node": "Limpar Sessão", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "tags": [{ "name": "TIO" }],
+  "triggerCount": 0,
+  "updatedAt": "2026-06-27T00:00:00.000Z",
+  "versionId": "03-motor1-corrida-v1"
+}
