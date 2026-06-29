@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TIO - App do Motorista</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #003D82;
+            --accent: #FFC107;
+            --white: #FFFFFF;
+            --light-gray: #F5F5F5;
+            --gray: #9CA3AF;
+            --dark-gray: #4B5563;
+            --success: #10B981;
+            --danger: #EF4444;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--light-gray);
+            overflow: hidden;
+        }
+
+        .app {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: var(--white);
+        }
+
+        .header {
+            background: var(--primary);
+            color: var(--white);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 50;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .menu-btn {
+            background: none;
+            border: none;
+            color: var(--white);
+            font-size: 22px;
+            cursor: pointer;
+        }
+
+        .logo-badge {
+            width: 32px;
+            height: 32px;
+            background: var(--accent);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: var(--primary);
+            font-size: 18px;
+        }
+
+        .header-title {
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .status-badge {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 280px;
+            height: 100vh;
+            background: var(--primary);
+            color: var(--white);
+            transform: translateX(-100%);
+            transition: transform 0.3s;
+            z-index: 100;
+            overflow-y: auto;
+        }
+
+        .sidebar.open {
+            transform: translateX(0);
+        }
+
+        .sidebar-header {
+            padding: 20px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            gap: 12px;
+        }
+
+        .sidebar-logo {
+            width: 50px;
+            height: 50px;
+            background: var(--accent);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: var(--primary);
+            font-size: 24px;
+        }
+
+        .sidebar-info h3 {
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+
+        .sidebar-info p {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .sidebar-menu {
+            list-style: none;
+            padding: 16px 0;
+        }
+
+        .sidebar-menu li {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .sidebar-menu button {
+            width: 100%;
+            padding: 12px 16px;
+            background: none;
+            border: none;
+            color: var(--white);
+            text-align: left;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .sidebar-menu button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            padding-left: 20px;
+        }
+
+        .sidebar-menu button.active {
+            background: var(--accent);
+            color: var(--primary);
+        }
+
+        .sidebar-bottom {
+            position: absolute;
+            bottom: 16px;
+            width: 100%;
+            padding: 0 16px;
+        }
+
+        .sidebar-bottom button {
+            width: 100%;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: var(--white);
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 12px;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+            z-index: 99;
+        }
+
+        .overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .main {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .screen {
+            display: none;
+            min-height: 100%;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        .login-screen {
+            background: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .login-box {
+            width: 100%;
+            max-width: 360px;
+        }
+
+        .login-header {
+            text-align: center;
+            color: var(--white);
+            margin-bottom: 40px;
+        }
+
+        .logo-big {
+            width: 100px;
+            height: 100px;
+            background: var(--accent);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 50px;
+            font-weight: 700;
+            color: var(--primary);
+            margin: 0 auto 16px;
+        }
+
+        .login-header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .login-header p {
+            font-size: 13px;
+            opacity: 0.9;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: var(--primary);
+            margin-bottom: 10px;
+        }
+
+        .login-link {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 12px;
+            margin-top: 16px;
+        }
+
+        .login-link a {
+            color: var(--accent);
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .map {
+            width: 100%;
+            height: 280px;
+            background: linear-gradient(135deg, var(--primary) 0%, #002d5f 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 60px;
+            color: var(--white);
+        }
+
+        .dashboard {
+            padding: 16px;
+        }
+
+        .card {
+            background: var(--white);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 12px;
+        }
+
+        .card-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--light-gray);
+        }
+
+        .card-row:last-child {
+            border-bottom: none;
+        }
+
+        .card-label {
+            font-size: 12px;
+            color: var(--gray);
+            font-weight: 600;
+        }
+
+        .card-value {
+            font-weight: 600;
+            color: var(--dark-gray);
+        }
+
+        .card-value.price {
+            color: var(--success);
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .btn-accept {
+            background: var(--success);
+            color: var(--white);
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .btn-decline {
+            background: var(--light-gray);
+            color: var(--dark-gray);
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .btn-finish {
+            background: var(--danger);
+            color: var(--white);
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 12px;
+            font-size: 13px;
+        }
+
+        .online-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        .history-list {
+            padding: 16px;
+        }
+
+        .history-item {
+            background: var(--white);
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .history-date {
+            font-size: 11px;
+            color: var(--gray);
+            margin-bottom: 4px;
+        }
+
+        .history-route {
+            font-size: 13px;
+            color: var(--dark-gray);
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .history-value {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--success);
+        }
+
+        .earnings-list {
+            padding: 16px;
+        }
+
+        .earnings-header {
+            background: var(--primary);
+            color: var(--white);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .earnings-label {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-bottom: 8px;
+        }
+
+        .earnings-value {
+            font-size: 36px;
+            font-weight: 700;
+        }
+
+        .earnings-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .stat-card {
+            background: var(--white);
+            padding: 14px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--gray);
+            margin-bottom: 6px;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .passenger-card {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--light-gray);
+            margin-bottom: 12px;
+        }
+
+        .passenger-avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--accent);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .passenger-info h4 {
+            font-size: 13px;
+            color: var(--dark-gray);
+            margin-bottom: 2px;
+        }
+
+        .passenger-info p {
+            font-size: 11px;
+            color: var(--gray);
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <div class="header">
+            <div class="header-left">
+                <button class="menu-btn" onclick="toggleMenu()">☰</button>
+                <div class="logo-badge">🚗</div>
+                <div class="header-title">TIO</div>
+            </div>
+            <div class="status-badge" id="headerStatus">Disponível</div>
+        </div>
+
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">🚗</div>
+                <div class="sidebar-info">
+                    <h3>João Silva</h3>
+                    <p>(11) 98765-4321</p>
+                </div>
+            </div>
+            <ul class="sidebar-menu">
+                <li><button class="active" onclick="switchScreen('dashboard')">📍 Dashboard</button></li>
+                <li><button onclick="switchScreen('history')">📋 Histórico</button></li>
+                <li><button onclick="switchScreen('earnings')">💰 Ganhos</button></li>
+                <li><button onclick="switchScreen('settings')">⚙️ Config</button></li>
+            </ul>
+            <div class="sidebar-bottom">
+                <button onclick="switchScreen('login')">🚪 Sair</button>
+            </div>
+        </div>
+
+        <div class="overlay" id="overlay" onclick="toggleMenu()"></div>
+
+        <div class="main">
+            <!-- LOGIN -->
+            <div class="screen active login-screen" id="login">
+                <div class="login-box">
+                    <div class="login-header">
+                        <div class="logo-big">🚗</div>
+                        <h1>TIO</h1>
+                        <p>Serviços Urbanos</p>
+                    </div>
+                    <form onsubmit="switchScreen(event, 'dashboard')">
+                        <div class="form-group">
+                            <label>Telefone</label>
+                            <input type="tel" value="(11) 98765-4321">
+                        </div>
+                        <div class="form-group">
+                            <label>Senha</label>
+                            <input type="password" value="123456">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Entrar</button>
+                    </form>
+                    <div class="login-link">
+                        Sem conta? <a onclick="switchScreen(event, 'register')">Cadastre-se</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DASHBOARD -->
+            <div class="screen dashboard" id="dashboard">
+                <div class="map">📍</div>
+                <div style="padding: 16px;">
+                    <div class="card">
+                        <div class="card-title">Status Online</div>
+                        <div class="online-badge">● DISPONÍVEL</div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">⭐ Nova Corrida Premium</div>
+                        <div class="passenger-card">
+                            <div class="passenger-avatar">MS</div>
+                            <div class="passenger-info">
+                                <h4>Maria Silva</h4>
+                                <p>⭐ 4.8 • 145 corridas</p>
+                            </div>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">📍 Origem</span>
+                            <span class="card-value">Av. Paulista, 1000</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">📌 Destino</span>
+                            <span class="card-value">Rua Augusta, 500</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">📏 Distância</span>
+                            <span class="card-value">3.2 km</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">⏱️ Tempo Est.</span>
+                            <span class="card-value">12 min</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Valor</span>
+                            <span class="card-value price">R$ 18,50</span>
+                        </div>
+                        <div class="actions">
+                            <button class="btn-accept" onclick="switchScreen(event, 'ride')">Aceitar</button>
+                            <button class="btn-decline">Recusar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EM CORRIDA -->
+            <div class="screen dashboard" id="ride">
+                <div class="map">🚗</div>
+                <div style="padding: 16px;">
+                    <div class="card">
+                        <div class="passenger-card">
+                            <div class="passenger-avatar">MS</div>
+                            <div class="passenger-info">
+                                <h4>Maria Silva</h4>
+                                <p>📞 (11) 98888-8888</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-row">
+                            <span class="card-label">📍 Origem</span>
+                            <span class="card-value">Av. Paulista, 1000</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">📌 Destino</span>
+                            <span class="card-value">Rua Augusta, 500</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Distância</span>
+                            <span class="card-value">3.2 km</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Tempo Restante</span>
+                            <span class="card-value">8 min</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Valor</span>
+                            <span class="card-value price">R$ 18,50</span>
+                        </div>
+                        <button class="btn-finish" onclick="switchScreen(event, 'complete')">Finalizar Corrida</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CORRIDA COMPLETA -->
+            <div class="screen dashboard" id="complete">
+                <div class="map">✅</div>
+                <div style="padding: 16px;">
+                    <div style="background: var(--primary); color: var(--white); border-radius: 12px; padding: 20px; margin-bottom: 12px; text-align: center;">
+                        <div style="font-size: 12px; opacity: 0.9; margin-bottom: 8px;">Ganho desta corrida</div>
+                        <div style="font-size: 32px; font-weight: 700;">R$ 18,50</div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-row">
+                            <span class="card-label">Passageiro</span>
+                            <span class="card-value">Maria Silva</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Tempo</span>
+                            <span class="card-value">14 min 32s</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Distância</span>
+                            <span class="card-value">3.2 km</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Avaliação</span>
+                            <span class="card-value">⭐⭐⭐⭐⭐</span>
+                        </div>
+                        <button class="btn-accept" onclick="switchScreen(event, 'dashboard')" style="margin-top: 12px; background: var(--primary);">Voltar</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- HISTÓRICO -->
+            <div class="screen" id="history">
+                <div style="height: 48px;"></div>
+                <div class="history-list">
+                    <div class="history-item">
+                        <div class="history-date">28 de junho, 14:35</div>
+                        <div class="history-route">📍 Av. Paulista → Rua Augusta</div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="font-size: 11px; color: var(--gray);">3.2 km • 14 min</span>
+                            <div class="history-value">+R$ 18,50</div>
+                        </div>
+                    </div>
+
+                    <div class="history-item">
+                        <div class="history-date">28 de junho, 13:10</div>
+                        <div class="history-route">📍 Pça da República → Vila Olímpia</div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="font-size: 11px; color: var(--gray);">8.5 km • 22 min</span>
+                            <div class="history-value">+R$ 32,00</div>
+                        </div>
+                    </div>
+
+                    <div class="history-item">
+                        <div class="history-date">28 de junho, 11:45</div>
+                        <div class="history-route">📍 Jardins → Centro</div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="font-size: 11px; color: var(--gray);">5.1 km • 18 min</span>
+                            <div class="history-value">+R$ 28,75</div>
+                        </div>
+                    </div>
+
+                    <div class="history-item">
+                        <div class="history-date">28 de junho, 10:20</div>
+                        <div class="history-route">📍 Consolação → Bela Vista</div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="font-size: 11px; color: var(--gray);">2.8 km • 10 min</span>
+                            <div class="history-value">+R$ 15,20</div>
+                        </div>
+                    </div>
+
+                    <div class="history-item">
+                        <div class="history-date">27 de junho, 19:50</div>
+                        <div class="history-route">📍 Ibirapuera → Liberdade</div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="font-size: 11px; color: var(--gray);">9.2 km • 28 min</span>
+                            <div class="history-value">+R$ 42,30</div>
+                        </div>
+                    </div>
+
+                    <div class="history-item">
+                        <div class="history-date">27 de junho, 18:15</div>
+                        <div class="history-route">📍 Vila Madalena → Itaim</div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="font-size: 11px; color: var(--gray);">4.6 km • 16 min</span>
+                            <div class="history-value">+R$ 22,80</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GANHOS -->
+            <div class="screen" id="earnings">
+                <div style="height: 48px;"></div>
+                <div class="earnings-list">
+                    <div class="earnings-header">
+                        <div class="earnings-label">Ganho de Hoje</div>
+                        <div class="earnings-value">R$ 159,75</div>
+                        <div style="font-size: 12px; opacity: 0.9; margin-top: 8px;">6 corridas completadas</div>
+                    </div>
+
+                    <div class="earnings-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">Esta Semana</div>
+                            <div class="stat-value">R$ 847,30</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Este Mês</div>
+                            <div class="stat-value">R$ 2.340,50</div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">📊 Detalhes de Hoje</div>
+                        <div class="card-row">
+                            <span class="card-label">🚗 Corridas</span>
+                            <span class="card-value">6</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">📏 Distância</span>
+                            <span class="card-value">28.9 km</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">⏱️ Tempo Online</span>
+                            <span class="card-value">5h 32m</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">⭐ Avaliação Média</span>
+                            <span class="card-value">4.9</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">💵 Ticket Médio</span>
+                            <span class="card-value price">R$ 26,63</span>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">🏦 Saque</div>
+                        <div class="card-row">
+                            <span class="card-label">Próximo Saque</span>
+                            <span class="card-value">30 de junho</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Valor Disponível</span>
+                            <span class="card-value price">R$ 2.340,50</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Banco</span>
+                            <span class="card-value">Nubank</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SETTINGS -->
+            <div class="screen dashboard" id="settings">
+                <div class="map">⚙️</div>
+                <div style="padding: 16px; text-align: center; color: var(--gray); margin-top: 20px;">
+                    <p>Configurações em breve...</p>
+                </div>
+            </div>
+
+            <!-- REGISTER -->
+            <div class="screen login-screen" id="register">
+                <div class="login-box">
+                    <div class="login-header">
+                        <div class="logo-big">📝</div>
+                        <h1>Cadastro</h1>
+                        <p>Crie sua conta</p>
+                    </div>
+                    <form onsubmit="switchScreen(event, 'dashboard')">
+                        <div class="form-group">
+                            <label>Nome</label>
+                            <input type="text" placeholder="Seu nome">
+                        </div>
+                        <div class="form-group">
+                            <label>Telefone</label>
+                            <input type="tel" placeholder="(11) 99999-9999">
+                        </div>
+                        <div class="form-group">
+                            <label>Placa do Veículo</label>
+                            <input type="text" placeholder="ABC-1234">
+                        </div>
+                        <div class="form-group">
+                            <label>Senha</label>
+                            <input type="password" placeholder="Crie uma senha">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Cadastrar</button>
+                    </form>
+                    <div class="login-link">
+                        Já tem conta? <a onclick="switchScreen(event, 'login')">Faça login</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('open');
+            document.getElementById('overlay').classList.toggle('open');
+        }
+
+        function switchScreen(e, id) {
+            if (e && e.preventDefault) e.preventDefault();
+
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+
+            const header = document.querySelector('.header');
+            if (id === 'login' || id === 'register') {
+                header.style.display = 'none';
+            } else {
+                header.style.display = 'flex';
+            }
+
+            document.getElementById('sidebar').classList.remove('open');
+            document.getElementById('overlay').classList.remove('open');
+
+            document.querySelectorAll('.sidebar-menu button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            if (document.querySelector(`.sidebar-menu button[onclick*="${id}"]`)) {
+                document.querySelector(`.sidebar-menu button[onclick*="${id}"]`).classList.add('active');
+            }
+        }
+    </script>
+</body>
+</html>
