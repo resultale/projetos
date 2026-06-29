@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TIO - App do Motorista</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #003D82;
+            --accent: #FFC107;
+            --white: #FFFFFF;
+            --light-gray: #F5F5F5;
+            --gray: #9CA3AF;
+            --dark-gray: #4B5563;
+            --success: #10B981;
+            --danger: #EF4444;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+            background: var(--light-gray);
+            overflow: hidden;
+        }
+
+        .app-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: var(--white);
+        }
+
+        /* HEADER */
+        .header {
+            background: var(--primary);
+            color: var(--white);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 50;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .menu-toggle {
+            background: none;
+            border: none;
+            color: var(--white);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 4px;
+        }
+
+        .header-title {
+            font-size: 18px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .header-logo {
+            width: 32px;
+            height: 32px;
+        }
+
+        .header-status {
+            font-size: 11px;
+            opacity: 0.9;
+            padding: 2px 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+        }
+
+        /* SIDEBAR */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 280px;
+            height: 100vh;
+            background: var(--primary);
+            color: var(--white);
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+            z-index: 100;
+            overflow-y: auto;
+        }
+
+        .sidebar.open {
+            transform: translateX(0);
+        }
+
+        .sidebar-header {
+            padding: 24px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .sidebar-logo {
+            width: 48px;
+            height: 48px;
+            border-radius: 8px;
+        }
+
+        .sidebar-user {
+            flex: 1;
+        }
+
+        .sidebar-name {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .sidebar-phone {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-top: 2px;
+        }
+
+        .sidebar-menu {
+            list-style: none;
+            padding: 16px 0;
+        }
+
+        .sidebar-menu li {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .sidebar-menu button {
+            width: 100%;
+            padding: 14px 16px;
+            background: none;
+            border: none;
+            color: var(--white);
+            text-align: left;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .sidebar-menu button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            padding-left: 20px;
+        }
+
+        .sidebar-menu button.active {
+            background: var(--accent);
+            color: var(--primary);
+        }
+
+        .sidebar-bottom {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            padding: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar-bottom button {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--white);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+            z-index: 99;
+        }
+
+        .overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* MAIN */
+        .main {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .screen {
+            display: none;
+            min-height: 100%;
+            width: 100%;
+        }
+
+        .screen.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* LOGIN */
+        .login-screen {
+            background: var(--primary);
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 380px;
+        }
+
+        .login-logo {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .login-logo-circle {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-logo-circle img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .login-title {
+            color: var(--white);
+            text-align: center;
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .login-subtitle {
+            color: rgba(255, 255, 255, 0.8);
+            text-align: center;
+            font-size: 13px;
+            margin-bottom: 40px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: var(--primary);
+            margin-bottom: 12px;
+        }
+
+        .signup-link {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 13px;
+            margin-top: 20px;
+        }
+
+        .signup-link a {
+            color: var(--accent);
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        /* DASHBOARD */
+        .map-container {
+            width: 100%;
+            height: 300px;
+            background: linear-gradient(135deg, var(--primary) 0%, #002d5f 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+        }
+
+        .dashboard-content {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+        }
+
+        .card {
+            background: var(--white);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 12px;
+        }
+
+        .card-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--light-gray);
+        }
+
+        .card-row:last-child {
+            border-bottom: none;
+        }
+
+        .card-label {
+            font-size: 12px;
+            color: var(--gray);
+            font-weight: 600;
+        }
+
+        .card-value {
+            font-weight: 600;
+            color: var(--dark-gray);
+        }
+
+        .card-value.price {
+            color: var(--success);
+            font-size: 18px;
+        }
+
+        .actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .btn-accept {
+            background: var(--success);
+            color: var(--white);
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-decline {
+            background: var(--light-gray);
+            color: var(--dark-gray);
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 12px;
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+
+        .history-item {
+            background: var(--white);
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .history-date {
+            font-size: 11px;
+            color: var(--gray);
+            margin-bottom: 6px;
+        }
+
+        .history-route {
+            font-size: 14px;
+            color: var(--dark-gray);
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .history-value {
+            font-weight: 700;
+            color: var(--success);
+            font-size: 16px;
+        }
+
+        .earnings-card {
+            background: var(--primary);
+            color: var(--white);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .earnings-value {
+            font-size: 40px;
+            font-weight: 700;
+            margin: 8px 0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .stat-box {
+            background: var(--white);
+            padding: 16px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--gray);
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <div class="header-left">
+                <button class="menu-toggle" onclick="toggleMenu()">☰</button>
+                <div class="header-title">
+                    <img class="header-logo" src="data:image/jpeg;base64,/9j/4RHjRXhpZgAATU0AKgAAAAgABwESAAMAAAABAAEAAAEaAAUAAAABAAAAYgEbAAUAAAABAAAAagEoAAMAAAABAAIAAAExAAIAAAAeAAAAcgEyAAIAAAAUAAAAkIdpAAQAAAABAAAApAAAANAACvyAAAAnEAAK/IAAACcQQWRvYmUgUGhvdG9zaG9wIENTNiAoV2luZG93cykAMjAyNjowNjoyNCAxMDo1NTowNAAAA6ABAAMAAAAB//8AAKACAAQAAAABAAAGAKADAAQAAAABAAAGAAAAAAAAAAAGAQMAAwAAAAEABgAAARoABQAAAAEAAAEeARsABQAAAAEAAAEmASgAAwAAAAEAAgAAAgEABAAAAAEAAAEuAgIABAAAAAEAABCtAAAAAAAAAEgAAAABAAAASAAAAAH/2P/tAAxBZG9iZV9DTQAC/+4ADkFkb2JlAGSAAAAAAf/bAIQADAgICAkIDAkJDBELCgsRFQ8MDA8VGBMTFRMTGBEMDAwMDAwRDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAENCwsNDg0QDg4QFA4ODhQUDg4ODhQRDAwMDAwREQwMDAwMDBEMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM/8AAEQgAoACgAwEiAAIRAQMRAf/dAAQACv/EAT8AAAEFAQEBAQEBAAAAAAAAAAMAAQIEBQYHCAkKCwEAAQUBAQEBAQEAAAAAAAAAAQACAwQFBgcICQoLEAABBAEDAgQCBQcGCAUDDDMBAAIRAwQhEjEFQVFhEyJxgTIGFJGhsUIjJBVSwWIzNHKC0UMHJZJT8OHxY3M1FqKygyZEk1RkRcKjdDYX0lXiZfKzhMPTdePzRieUpIW0lcTU5PSltcXV5fVWZnaGlqa2xtbm9jdHV2d3h5ent8fX5/cRAAICAQIEBAMEBQYHBwYFNQEAAhEDITESBEFRYXEiEwUygZEUobFCI8FS0fAzJGLhcoKSQ1MVY3M08SUGFqKygwcmNcLSRJNUoxdkRVU2dGXi8rOEw9N14/NGlKSFtJXE1OT0pbXF1eX1VmZ2hpamtsbW5vYnN0dXZ3eHl6e3x//aAAwDAQACEQMRAD8A4BJJJdA0VJJJ0kLJ0ydFSkkkklKSSRUopJFJBSkkk6SlJJJklP8A/9DgEkk66BorJJ0kULJ0ydFSkkkklKSSRUopJJJJSk6ZJT//0OATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//zQ" alt="TIO">
+                    <span>TIO</span>
+                </div>
+            </div>
+            <div class="header-status">Disponível</div>
+        </div>
+
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <img class="sidebar-logo" src="data:image/jpeg;base64,/9j/4RHjRXhpZgAATU0AKgAAAAgABwESAAMAAAABAAEAAAEaAAUAAAABAAAAYgEbAAUAAAABAAAAagEoAAMAAAABAAIAAAExAAIAAAAeAAAAcgEyAAIAAAAUAAAAkIdpAAQAAAABAAAApAAAANAACvyAAAAnEAAK/IAAACcQQWRvYmUgUGhvdG9zaG9wIENTNiAoV2luZG93cykAMjAyNjowNjoyNCAxMDo1NTowNAAAA6ABAAMAAAAB//8AAKACAAQAAAABAAAGAKADAAQAAAABAAAGAAAAAAAAAAAGAQMAAwAAAAEABgAAARoABQAAAAEAAAEeARsABQAAAAEAAAEmASgAAwAAAAEAAgAAAgEABAAAAAEAAAEuAgIABAAAAAEAABCtAAAAAAAAAEgAAAABAAAASAAAAAH/2P/tAAxBZG9iZV9DTQAC/+4ADkFkb2JlAGSAAAAAAf/bAIQADAgICAkIDAkJDBELCgsRFQ8MDA8VGBMTFRMTGBEMDAwMDAwRDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAENCwsNDg0QDg4QFA4ODhQUDg4ODhQRDAwMDAwREQwMDAwMDBEMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM/8AAEQgAoACgAwEiAAIRAQMRAf/dAAQACv/EAT8AAAEFAQEBAQEBAAAAAAAAAAMAAQIEBQYHCAkKCwEAAQUBAQEBAQEAAAAAAAAAAQACAwQFBgcICQoLEAABBAEDAgQCBQcGCAUDDDMBAAIRAwQhEjEFQVFhEyJxgTIGFJGhsUIjJBVSwWIzNHKC0UMHJZJT8OHxY3M1FqKygyZEk1RkRcKjdDYX0lXiZfKzhMPTdePzRieUpIW0lcTU5PSltcXV5fVWZnaGlqa2xtbm9jdHV2d3h5ent8fX5/cRAAICAQIEBAMEBQYHBwYFNQEAAhEDITESBEFRYXEiEwUygZEUobFCI8FS0fAzJGLhcoKSQ1MVY3M08SUGFqKygwcmNcLSRJNUoxdkRVU2dGXi8rOEw9N14/NGlKSFtJXE1OT0pbXF1eX1VmZ2hpamtsbW5vYnN0dXZ3eHl6e3x//aAAwDAQACEQMRAD8A4BJJJdA0VJJJ0kLJ0ydFSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//" alt="TIO">
+                <div class="sidebar-user">
+                    <div class="sidebar-name">João Silva</div>
+                    <div class="sidebar-phone">(11) 98765-4321</div>
+                </div>
+            </div>
+            <ul class="sidebar-menu">
+                <li><button class="active" onclick="switchScreen('dashboard')">📍 Dashboard</button></li>
+                <li><button onclick="switchScreen('history')">📋 Histórico</button></li>
+                <li><button onclick="switchScreen('earnings')">💰 Ganhos</button></li>
+            </ul>
+            <div class="sidebar-bottom">
+                <button onclick="switchScreen('login')">Sair</button>
+            </div>
+        </div>
+
+        <div class="overlay" id="overlay" onclick="toggleMenu()"></div>
+
+        <div class="main">
+            <!-- LOGIN -->
+            <div class="screen active login-screen" id="login">
+                <div class="login-container">
+                    <div class="login-logo">
+                        <div class="login-logo-circle"><img src="data:image/jpeg;base64,/9j/4RHjRXhpZgAATU0AKgAAAAgABwESAAMAAAABAAEAAAEaAAUAAAABAAAAYgEbAAUAAAABAAAAagEoAAMAAAABAAIAAAExAAIAAAAeAAAAcgEyAAIAAAAUAAAAkIdpAAQAAAABAAAApAAAANAACvyAAAAnEAAK/IAAACcQQWRvYmUgUGhvdG9zaG9wIENTNiAoV2luZG93cykAMjAyNjowNjoyNCAxMDo1NTowNAAAA6ABAAMAAAAB//8AAKACAAQAAAABAAAGAKADAAQAAAABAAAGAAAAAAAAAAAGAQMAAwAAAAEABgAAARoABQAAAAEAAAEeARsABQAAAAEAAAEmASgAAwAAAAEAAgAAAgEABAAAAAEAAAEuAgIABAAAAAEAABCtAAAAAAAAAEgAAAABAAAASAAAAAH/2P/tAAxBZG9iZV9DTQAC/+4ADkFkb2JlAGSAAAAAAf/bAIQADAgICAkIDAkJDBELCgsRFQ8MDA8VGBMTFRMTGBEMDAwMDAwRDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAENCwsNDg0QDg4QFA4ODhQUDg4ODhQRDAwMDAwREQwMDAwMDBEMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM/8AAEQgAoACgAwEiAAIRAQMRAf/dAAQACv/EAT8AAAEFAQEBAQEBAAAAAAAAAAMAAQIEBQYHCAkKCwEAAQUBAQEBAQEAAAAAAAAAAQACAwQFBgcICQoLEAABBAEDAgQCBQcGCAUDDDMBAAIRAwQhEjEFQVFhEyJxgTIGFJGhsUIjJBVSwWIzNHKC0UMHJZJT8OHxY3M1FqKygyZEk1RkRcKjdDYX0lXiZfKzhMPTdePzRieUpIW0lcTU5PSltcXV5fVWZnaGlqa2xtbm9jdHV2d3h5ent8fX5/cRAAICAQIEBAMEBQYHBwYFNQEAAhEDITESBEFRYXEiEwUygZEUobFCI8FS0fAzJGLhcoKSQ1MVY3M08SUGFqKygwcmNcLSRJNUoxdkRVU2dGXi8rOEw9N14/NGlKSFtJXE1OT0pbXF1eX1VmZ2hpamtsbW5vYnN0dXZ3eHl6e3x//aAAwDAQACEQMRAD8A4BJJJdA0VJJJ0kLJ0ydFSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//zQ" alt="TIO"></div>
+                        <div class="login-title">TIO</div>
+                        <div class="login-subtitle">Serviços Urbanos</div>
+                    </div>
+                    <form onsubmit="switchScreen(event, 'dashboard')">
+                        <div class="form-group">
+                            <label>Telefone</label>
+                            <input type="tel" placeholder="(11) 99999-9999" value="(11) 98765-4321">
+                        </div>
+                        <div class="form-group">
+                            <label>Senha</label>
+                            <input type="password" placeholder="Sua senha" value="123456">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Entrar</button>
+                    </form>
+                    <div class="signup-link">
+                        Não tem conta? <a onclick="switchScreen(event, 'register')">Cadastrar</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DASHBOARD -->
+            <div class="screen dashboard-screen" id="dashboard">
+                <div class="map-container">📍</div>
+                <div class="dashboard-content">
+                    <div class="card">
+                        <div class="card-title">Disponível</div>
+                        <div class="status-badge">● ONLINE</div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-row">
+                            <span class="card-label">Passageiro</span>
+                            <span class="card-value">Maria Silva</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Origem</span>
+                            <span class="card-value">Av. Paulista</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Destino</span>
+                            <span class="card-value">Rua Augusta</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Distância</span>
+                            <span class="card-value">3.2 km</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Valor</span>
+                            <span class="card-value price">R$ 18,50</span>
+                        </div>
+                        <div class="actions">
+                            <button class="btn-accept" onclick="switchScreen(event, 'ride')">Aceitar</button>
+                            <button class="btn-decline">Recusar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EM CORRIDA -->
+            <div class="screen dashboard-screen" id="ride">
+                <div class="map-container">🚗</div>
+                <div class="dashboard-content">
+                    <div class="card">
+                        <div class="card-row">
+                            <span class="card-label">👤 Passageiro</span>
+                            <span class="card-value">Maria Silva</span>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-row">
+                            <span class="card-label">📍 Origem</span>
+                            <span class="card-value">Av. Paulista, 1000</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">📌 Destino</span>
+                            <span class="card-value">Rua Augusta, 500</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">⏱️ Tempo</span>
+                            <span class="card-value">12 min</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Valor</span>
+                            <span class="card-value price">R$ 18,50</span>
+                        </div>
+                        <button class="btn-accept" style="background: #EF4444; margin-top: 12px;" onclick="switchScreen(event, 'complete')">Finalizar Corrida</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CORRIDA COMPLETA -->
+            <div class="screen dashboard-screen" id="complete">
+                <div class="map-container">✅</div>
+                <div class="dashboard-content">
+                    <div class="earnings-card">
+                        <div class="stat-label">Ganho desta corrida</div>
+                        <div class="earnings-value">R$ 18,50</div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-row">
+                            <span class="card-label">Passageiro</span>
+                            <span class="card-value">Maria Silva</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Tempo</span>
+                            <span class="card-value">14 min 32s</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Distância</span>
+                            <span class="card-value">3.2 km</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Avaliação</span>
+                            <span class="card-value">⭐⭐⭐⭐⭐</span>
+                        </div>
+                        <button class="btn-accept" onclick="switchScreen(event, 'dashboard')" style="margin-top: 12px;">Voltar</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- HISTÓRICO -->
+            <div class="screen dashboard-screen" id="history">
+                <div style="height: 60px;"></div>
+                <div class="dashboard-content">
+                    <div class="history-item">
+                        <div class="history-date">Hoje, 10:35</div>
+                        <div class="history-route">Av. Paulista → Rua Augusta</div>
+                        <div class="history-value">+R$ 18,50</div>
+                    </div>
+                    <div class="history-item">
+                        <div class="history-date">Hoje, 09:45</div>
+                        <div class="history-route">Pça da República → Vila Olímpia</div>
+                        <div class="history-value">+R$ 32,00</div>
+                    </div>
+                    <div class="history-item">
+                        <div class="history-date">Hoje, 08:20</div>
+                        <div class="history-route">Jardins → Centro</div>
+                        <div class="history-value">+R$ 28,75</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GANHOS -->
+            <div class="screen dashboard-screen" id="earnings">
+                <div style="height: 60px;"></div>
+                <div class="dashboard-content">
+                    <div class="earnings-card">
+                        <div class="stat-label">Ganho de Hoje</div>
+                        <div class="earnings-value">R$ 94,75</div>
+                        <div class="earnings-subtitle">5 corridas completadas</div>
+                    </div>
+
+                    <div class="grid">
+                        <div class="stat-box">
+                            <div class="stat-label">Esta Semana</div>
+                            <div class="stat-value">R$ 487,30</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Este Mês</div>
+                            <div class="stat-value">R$ 1.850,50</div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-row">
+                            <span class="card-label">Corridas</span>
+                            <span class="card-value">5</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Tempo Online</span>
+                            <span class="card-value">3h 45m</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Avaliação Média</span>
+                            <span class="card-value">4.8 ⭐</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- REGISTRO -->
+            <div class="screen login-screen" id="register">
+                <div class="login-container">
+                    <div class="login-logo">
+                        <div class="login-logo-circle"><img src="data:image/jpeg;base64,/9j/4RHjRXhpZgAATU0AKgAAAAgABwESAAMAAAABAAEAAAEaAAUAAAABAAAAYgEbAAUAAAABAAAAagEoAAMAAAABAAIAAAExAAIAAAAeAAAAcgEyAAIAAAAUAAAAkIdpAAQAAAABAAAApAAAANAACvyAAAAnEAAK/IAAACcQQWRvYmUgUGhvdG9zaG9wIENTNiAoV2luZG93cykAMjAyNjowNjoyNCAxMDo1NTowNAAAA6ABAAMAAAAB//8AAKACAAQAAAABAAAGAKADAAQAAAABAAAGAAAAAAAAAAAGAQMAAwAAAAEABgAAARoABQAAAAEAAAEeARsABQAAAAEAAAEmASgAAwAAAAEAAgAAAgEABAAAAAEAAAEuAgIABAAAAAEAABCtAAAAAAAAAEgAAAABAAAASAAAAAH/2P/tAAxBZG9iZV9DTQAC/+4ADkFkb2JlAGSAAAAAAf/bAIQADAgICAkIDAkJDBELCgsRFQ8MDA8VGBMTFRMTGBEMDAwMDAwRDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAENCwsNDg0QDg4QFA4ODhQUDg4ODhQRDAwMDAwREQwMDAwMDBEMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM/8AAEQgAoACgAwEiAAIRAQMRAf/dAAQACv/EAT8AAAEFAQEBAQEBAAAAAAAAAAMAAQIEBQYHCAkKCwEAAQUBAQEBAQEAAAAAAAAAAQACAwQFBgcICQoLEAABBAEDAgQCBQcGCAUDDDMBAAIRAwQhEjEFQVFhEyJxgTIGFJGhsUIjJBVSwWIzNHKC0UMHJZJT8OHxY3M1FqKygyZEk1RkRcKjdDYX0lXiZfKzhMPTdePzRieUpIW0lcTU5PSltcXV5fVWZnaGlqa2xtbm9jdHV2d3h5ent8fX5/cRAAICAQIEBAMEBQYHBwYFNQEAAhEDITESBEFRYXEiEwUygZEUobFCI8FS0fAzJGLhcoKSQ1MVY3M08SUGFqKygwcmNcLSRJNUoxdkRVU2dGXi8rOEw9N14/NGlKSFtJXE1OT0pbXF1eX1VmZ2hpamtsbW5vYnN0dXZ3eHl6e3x//aAAwDAQACEQMRAD8A4BJJJdA0VJJJ0kLJ0ydFSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//Q4BJJOugaKySdJFCydMnRUpJJJJSkkkklKSSRUopJFJBSkkk6SlJJJJSkkkklKSSSSUpJJJJSkkkklP/0eATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP/0uATpkl0LRXSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSSUpJJJJSkkkklKSSSSUpJJJJSkkkklP//" alt="TIO"></div>
+                        <div class="login-title">Cadastro</div>
+                    </div>
+                    <form onsubmit="switchScreen(event, 'dashboard')">
+                        <div class="form-group">
+                            <label>Nome</label>
+                            <input type="text" placeholder="Seu nome">
+                        </div>
+                        <div class="form-group">
+                            <label>Telefone</label>
+                            <input type="tel" placeholder="(11) 99999-9999">
+                        </div>
+                        <div class="form-group">
+                            <label>Placa</label>
+                            <input type="text" placeholder="ABC-1234">
+                        </div>
+                        <div class="form-group">
+                            <label>Senha</label>
+                            <input type="password" placeholder="Sua senha">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Cadastrar</button>
+                    </form>
+                    <div class="signup-link">
+                        Tem conta? <a onclick="switchScreen(event, 'login')">Fazer login</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('open');
+            document.getElementById('overlay').classList.toggle('open');
+        }
+
+        function switchScreen(e, screenName) {
+            if (e && e.preventDefault) e.preventDefault();
+
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenName).classList.add('active');
+
+            const header = document.querySelector('.header');
+            if (screenName === 'login' || screenName === 'register') {
+                header.style.display = 'none';
+            } else {
+                header.style.display = 'flex';
+            }
+
+            document.getElementById('sidebar').classList.remove('open');
+            document.getElementById('overlay').classList.remove('open');
+        }
+    </script>
+</body>
+</html>
