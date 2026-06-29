@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App do Motorista - Protótipo Visual</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            min-height: 800px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .screen {
+            display: none;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin-bottom: 10px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+            margin-top: 10px;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .btn-accept {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-accept:hover {
+            background: #059669;
+        }
+
+        .btn-finish {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-finish:hover {
+            background: #dc2626;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+
+        .status-available {
+            background: #d1fae5;
+            color: #047857;
+        }
+
+        .status-busy {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .card {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 12px;
+        }
+
+        .card-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .card-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .card-label {
+            color: #666;
+        }
+
+        .card-value {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .map-placeholder {
+            width: 100%;
+            height: 250px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .stat-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .passenger-info {
+            background: #eff6ff;
+            border-left: 4px solid #667eea;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+        }
+
+        .passenger-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .passenger-phone {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .route-info {
+            background: #f3f4f6;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 13px;
+        }
+
+        .route-label {
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .route-text {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .history-item {
+            border-bottom: 1px solid #e5e7eb;
+            padding: 12px 0;
+        }
+
+        .history-item:last-child {
+            border-bottom: none;
+        }
+
+        .history-date {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 4px;
+        }
+
+        .history-route {
+            font-size: 13px;
+            color: #333;
+            font-weight: 500;
+            margin-bottom: 6px;
+        }
+
+        .history-value {
+            font-weight: 700;
+            color: #10b981;
+            font-size: 14px;
+        }
+
+        .link-text {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 13px;
+            text-align: center;
+            display: block;
+            margin-top: 15px;
+            cursor: pointer;
+        }
+
+        .link-text:hover {
+            text-decoration: underline;
+        }
+
+        .nav-tabs {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0;
+            margin-top: 20px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .nav-tab {
+            padding: 12px;
+            text-align: center;
+            border: none;
+            background: white;
+            cursor: pointer;
+            font-size: 13px;
+            color: #666;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .nav-tab.active {
+            color: #667eea;
+            border-bottom: 3px solid #667eea;
+            background: #f9fafb;
+        }
+
+        .notification {
+            background: #dbeafe;
+            border-left: 4px solid #3b82f6;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            color: #1e40af;
+        }
+
+        .text-center {
+            text-align: center;
+            color: #999;
+            font-size: 13px;
+            padding: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- TELA 1: LOGIN -->
+        <div class="screen active" id="login">
+            <div class="header">
+                <h1>🚗 Motorista</h1>
+                <p>Faça login para começar</p>
+            </div>
+            <div class="content">
+                <form onsubmit="goToScreen(event, 'dashboard')">
+                    <div class="form-group">
+                        <label>Telefone</label>
+                        <input type="tel" placeholder="(11) 99999-9999" value="(11) 98765-4321">
+                    </div>
+                    <div class="form-group">
+                        <label>Senha</label>
+                        <input type="password" placeholder="Sua senha" value="123456">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Entrar</button>
+                </form>
+                <a href="#" class="link-text" onclick="goToScreen(event, 'register')">Criar nova conta</a>
+            </div>
+        </div>
+
+        <!-- TELA 2: REGISTRO -->
+        <div class="screen" id="register">
+            <div class="header">
+                <h1>📝 Cadastro</h1>
+                <p>Crie sua conta de motorista</p>
+            </div>
+            <div class="content">
+                <form onsubmit="goToScreen(event, 'dashboard')">
+                    <div class="form-group">
+                        <label>Nome completo</label>
+                        <input type="text" placeholder="João da Silva">
+                    </div>
+                    <div class="form-group">
+                        <label>Telefone</label>
+                        <input type="tel" placeholder="(11) 99999-9999">
+                    </div>
+                    <div class="form-group">
+                        <label>Email (opcional)</label>
+                        <input type="email" placeholder="seu@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Senha</label>
+                        <input type="password" placeholder="Crie uma senha segura">
+                    </div>
+                    <div class="form-group">
+                        <label>Placa do veículo</label>
+                        <input type="text" placeholder="ABC-1234">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Criar conta</button>
+                </form>
+                <a href="#" class="link-text" onclick="goToScreen(event, 'login')">Já tem conta? Faça login</a>
+            </div>
+        </div>
+
+        <!-- TELA 3: DASHBOARD (DISPONÍVEL) -->
+        <div class="screen" id="dashboard">
+            <div class="header">
+                <h1>Olá, João!</h1>
+                <p>Você está disponível</p>
+            </div>
+            <div class="content">
+                <div class="notification">
+                    ✅ Localização ativa e funcionando normalmente
+                </div>
+
+                <div class="map-placeholder">
+                    📍 Seu mapa em tempo real
+                </div>
+
+                <span class="status-badge status-available">● Disponível</span>
+
+                <div style="margin-top: 20px;">
+                    <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">Nova Corrida Disponível!</h3>
+                    <div class="card">
+                        <div class="card-row">
+                            <span class="card-label">Passageiro:</span>
+                            <span class="card-value">Maria S.</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Origem:</span>
+                            <span class="card-value">Av. Paulista</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Destino:</span>
+                            <span class="card-value">Rua Augusta</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Distância:</span>
+                            <span class="card-value">3.2 km</span>
+                        </div>
+                        <div class="card-row">
+                            <span class="card-label">Valor:</span>
+                            <span class="card-value" style="color: #10b981;">R$ 18,50</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-accept" onclick="goToScreen(event, 'em-corrida')">Aceitar Corrida</button>
+                <button class="btn btn-secondary" onclick="location.reload()">Recusar</button>
+
+                <div class="nav-tabs">
+                    <button class="nav-tab active" onclick="goToTab(this, 'dashboard')">Dashboard</button>
+                    <button class="nav-tab" onclick="goToTab(this, 'historico')">Histórico</button>
+                    <button class="nav-tab" onclick="goToTab(this, 'saldos')">Saldos</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TELA 4: EM CORRIDA -->
+        <div class="screen" id="em-corrida">
+            <div class="header">
+                <h1>🚗 Em Corrida</h1>
+                <p>Aguarde instruções</p>
+            </div>
+            <div class="content">
+                <div class="map-placeholder">
+                    📍 Rota em tempo real
+                </div>
+
+                <div class="passenger-info">
+                    <div class="passenger-name">Maria Silva</div>
+                    <div class="passenger-phone">📞 (11) 98888-8888</div>
+                </div>
+
+                <div class="route-info">
+                    <div class="route-label">📍 Origem</div>
+                    <div class="route-text">Av. Paulista, 1000</div>
+                </div>
+
+                <div class="route-info">
+                    <div class="route-label">📍 Destino</div>
+                    <div class="route-text">Rua Augusta, 500</div>
+                </div>
+
+                <div class="card">
+                    <div class="card-row">
+                        <span class="card-label">Distância:</span>
+                        <span class="card-value">3.2 km</span>
+                    </div>
+                    <div class="card-row">
+                        <span class="card-label">Tempo estimado:</span>
+                        <span class="card-value">12 minutos</span>
+                    </div>
+                    <div class="card-row">
+                        <span class="card-label">Valor:</span>
+                        <span class="card-value" style="color: #10b981;">R$ 18,50</span>
+                    </div>
+                </div>
+
+                <span class="status-badge status-busy">● Em Corrida</span>
+
+                <button class="btn btn-finish" onclick="goToScreen(event, 'finalizado')">Finalizar Corrida</button>
+                <button class="btn btn-secondary" onclick="goToScreen(event, 'dashboard')">Voltar</button>
+            </div>
+        </div>
+
+        <!-- TELA 5: CORRIDA FINALIZADA -->
+        <div class="screen" id="finalizado">
+            <div class="header">
+                <h1>✅ Corrida Finalizada</h1>
+                <p>Obrigado pela corrida!</p>
+            </div>
+            <div class="content">
+                <div class="card" style="background: #dcfce7; border-color: #10b981;">
+                    <div class="card-title" style="color: #10b981;">Ganho desta corrida</div>
+                    <div style="text-align: center; margin: 20px 0;">
+                        <div style="font-size: 40px; font-weight: 700; color: #10b981;">R$ 18,50</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Detalhes da corrida</div>
+                    <div class="card-row">
+                        <span class="card-label">Passageiro:</span>
+                        <span class="card-value">Maria S.</span>
+                    </div>
+                    <div class="card-row">
+                        <span class="card-label">Distância:</span>
+                        <span class="card-value">3.2 km</span>
+                    </div>
+                    <div class="card-row">
+                        <span class="card-label">Tempo:</span>
+                        <span class="card-value">14 min 32s</span>
+                    </div>
+                    <div class="card-row">
+                        <span class="card-label">Avaliação:</span>
+                        <span class="card-value">⭐⭐⭐⭐⭐</span>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="goToScreen(event, 'dashboard')">Voltar ao Dashboard</button>
+            </div>
+        </div>
+
+        <!-- TELA 6: HISTÓRICO -->
+        <div class="screen" id="historico">
+            <div class="header">
+                <h1>📋 Histórico</h1>
+                <p>Suas corridas recentes</p>
+            </div>
+            <div class="content">
+                <div class="history-item">
+                    <div class="history-date">28 de junho, 10:35</div>
+                    <div class="history-route">Av. Paulista → Rua Augusta</div>
+                    <div class="history-value">+R$ 18,50</div>
+                </div>
+
+                <div class="history-item">
+                    <div class="history-date">28 de junho, 09:45</div>
+                    <div class="history-route">Pça da República → Vila Olímpia</div>
+                    <div class="history-value">+R$ 32,00</div>
+                </div>
+
+                <div class="history-item">
+                    <div class="history-date">28 de junho, 08:20</div>
+                    <div class="history-route">Jardins → Centro</div>
+                    <div class="history-value">+R$ 28,75</div>
+                </div>
+
+                <div class="history-item">
+                    <div class="history-date">27 de junho, 19:10</div>
+                    <div class="history-route">Consolação → Bela Vista</div>
+                    <div class="history-value">+R$ 15,20</div>
+                </div>
+
+                <div class="text-center">
+                    Ver mais corridas
+                </div>
+
+                <div class="nav-tabs">
+                    <button class="nav-tab" onclick="goToTab(this, 'dashboard')">Dashboard</button>
+                    <button class="nav-tab active" onclick="goToTab(this, 'historico')">Histórico</button>
+                    <button class="nav-tab" onclick="goToTab(this, 'saldos')">Saldos</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TELA 7: SALDOS -->
+        <div class="screen" id="saldos">
+            <div class="header">
+                <h1>💰 Seus Saldos</h1>
+                <p>Acompanhe seus ganhos</p>
+            </div>
+            <div class="content">
+                <div class="stats">
+                    <div class="stat-box">
+                        <div class="stat-label">Hoje</div>
+                        <div class="stat-value">R$ 94,75</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-label">Esta Semana</div>
+                        <div class="stat-value">R$ 487,30</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Ganho Total do Mês</div>
+                    <div style="font-size: 32px; font-weight: 700; color: #667eea; text-align: center; padding: 20px 0;">
+                        R$ 1.850,50
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Detalhes de Hoje</div>
+                    <div class="card-row">
+                        <span class="card-label">Corridas:</span>
+                        <span class="card-value">5</span>
+                    </div>
+                    <div class="card-row">
+                        <span class="card-label">Distância:</span>
+                        <span class="card-value">18.5 km</span>
+                    </div>
+                    <div class="card-row">
+                        <span class="card-label">Tempo online:</span>
+                        <span class="card-value">3h 45m</span>
+                    </div>
+                    <div class="card-row">
+                        <span class="card-label">Avaliação média:</span>
+                        <span class="card-value">4.8 ⭐</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Método de Pagamento</div>
+                    <div class="card-row">
+                        <span class="card-label">Banco:</span>
+                        <span class="card-value">Nubank</span>
+                    </div>
+                    <div class="card-row">
+                        <span class="card-label">Agência:</span>
+                        <span class="card-value">0001</span>
+                    </div>
+                    <div class="card-row">
+                        <span class="card-label">Próximo saque:</span>
+                        <span class="card-value">30 de junho</span>
+                    </div>
+                </div>
+
+                <div class="nav-tabs">
+                    <button class="nav-tab" onclick="goToTab(this, 'dashboard')">Dashboard</button>
+                    <button class="nav-tab" onclick="goToTab(this, 'historico')">Histórico</button>
+                    <button class="nav-tab active" onclick="goToTab(this, 'saldos')">Saldos</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function goToScreen(e, screenName) {
+            e.preventDefault();
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            document.getElementById(screenName).classList.add('active');
+        }
+
+        function goToTab(button, tabName) {
+            // Remove active de todos os tabs
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            button.classList.add('active');
+
+            // Remove active de todas as telas
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            document.getElementById(tabName).classList.add('active');
+        }
+    </script>
+</body>
+</html>
