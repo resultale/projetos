@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TIO - App do Motorista</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #003D82;
+            --accent: #FFC107;
+            --white: #FFFFFF;
+            --light-gray: #F5F5F5;
+            --gray: #9CA3AF;
+            --dark-gray: #4B5563;
+            --success: #10B981;
+            --danger: #EF4444;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+            background: var(--light-gray);
+            overflow: hidden;
+        }
+
+        .app-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: var(--white);
+        }
+
+        /* HEADER */
+        .header {
+            background: var(--primary);
+            color: var(--white);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 50;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .menu-toggle {
+            background: none;
+            border: none;
+            color: var(--white);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .header-title {
+            font-size: 18px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .header-icon {
+            width: 28px;
+            height: 28px;
+            background: var(--accent);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: var(--primary);
+            font-size: 16px;
+        }
+
+        .header-status {
+            font-size: 11px;
+            opacity: 0.9;
+            padding: 2px 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+        }
+
+        /* SIDEBAR MENU */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 280px;
+            height: 100vh;
+            background: var(--primary);
+            color: var(--white);
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+            z-index: 100;
+            overflow-y: auto;
+        }
+
+        .sidebar.open {
+            transform: translateX(0);
+        }
+
+        .sidebar-header {
+            padding: 24px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .sidebar-logo {
+            width: 40px;
+            height: 40px;
+            background: var(--accent);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: var(--primary);
+            font-size: 20px;
+        }
+
+        .sidebar-user {
+            flex: 1;
+        }
+
+        .sidebar-name {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .sidebar-phone {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-top: 2px;
+        }
+
+        .sidebar-menu {
+            list-style: none;
+            padding: 16px 0;
+        }
+
+        .sidebar-menu li {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .sidebar-menu button {
+            width: 100%;
+            padding: 14px 16px;
+            background: none;
+            border: none;
+            color: var(--white);
+            text-align: left;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .sidebar-menu button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            padding-left: 20px;
+        }
+
+        .sidebar-menu button.active {
+            background: var(--accent);
+            color: var(--primary);
+        }
+
+        .sidebar-menu-icon {
+            font-size: 18px;
+            width: 20px;
+        }
+
+        .sidebar-bottom {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            padding: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar-bottom button {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--white);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .sidebar-bottom button:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+            z-index: 99;
+        }
+
+        .overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* MAIN CONTENT */
+        .main {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .screen {
+            display: none;
+            height: 100%;
+            width: 100%;
+        }
+
+        .screen.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* TELA DE LOGIN */
+        .login-screen {
+            background: var(--primary);
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 380px;
+        }
+
+        .login-logo {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .login-logo-circle {
+            width: 80px;
+            height: 80px;
+            background: var(--accent);
+            border-radius: 16px;
+            margin: 0 auto 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            font-weight: bold;
+            color: var(--primary);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+        }
+
+        .login-title {
+            color: var(--white);
+            text-align: center;
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .login-subtitle {
+            color: rgba(255, 255, 255, 0.8);
+            text-align: center;
+            font-size: 13px;
+            margin-bottom: 40px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            background: rgba(255, 255, 255, 0.95);
+            transition: all 0.2s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            background: var(--white);
+            box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.3);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: var(--primary);
+            margin-bottom: 12px;
+        }
+
+        .btn-primary:active {
+            transform: scale(0.98);
+        }
+
+        .signup-link {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 13px;
+            margin-top: 20px;
+        }
+
+        .signup-link a {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* TELA DASHBOARD */
+        .dashboard-screen {
+            flex-direction: column;
+        }
+
+        .map-container {
+            width: 100%;
+            height: 320px;
+            background: linear-gradient(135deg, var(--primary) 0%, #002d5f 100%);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .map-marker {
+            font-size: 48px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+            }
+        }
+
+        .map-info {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            background: var(--white);
+            padding: 12px 16px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            font-size: 12px;
+        }
+
+        .map-info-status {
+            color: var(--success);
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .map-info-text {
+            color: var(--dark-gray);
+            font-size: 11px;
+        }
+
+        .dashboard-content {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+        }
+
+        .status-card {
+            background: var(--white);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            border-left: 4px solid var(--accent);
+        }
+
+        .status-title {
+            font-size: 12px;
+            color: var(--gray);
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .status-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 12px;
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* RIDE CARD */
+        .ride-card {
+            background: var(--white);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .ride-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .ride-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .ride-priority {
+            background: var(--accent);
+            color: var(--primary);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .ride-detail {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--light-gray);
+        }
+
+        .ride-detail:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .ride-icon {
+            font-size: 20px;
+            width: 24px;
+        }
+
+        .ride-info {
+            flex: 1;
+        }
+
+        .ride-label {
+            font-size: 11px;
+            color: var(--gray);
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+        }
+
+        .ride-text {
+            font-size: 14px;
+            color: var(--dark-gray);
+            font-weight: 600;
+        }
+
+        .ride-value {
+            text-align: right;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--success);
+        }
+
+        .ride-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .btn-accept {
+            background: var(--success);
+            color: var(--white);
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-accept:active {
+            transform: scale(0.98);
+        }
+
+        .btn-decline {
+            background: var(--light-gray);
+            color: var(--dark-gray);
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-decline:active {
+            background: #E5E7EB;
+        }
+
+        /* RIDE IN PROGRESS */
+        .ride-progress {
+            background: var(--white);
+            padding: 16px;
+            margin-bottom: 16px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .passenger-card {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--light-gray);
+            margin-bottom: 16px;
+        }
+
+        .passenger-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary);
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        .passenger-info {
+            flex: 1;
+        }
+
+        .passenger-name {
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 2px;
+        }
+
+        .passenger-rating {
+            font-size: 12px;
+            color: var(--gray);
+        }
+
+        .route-section {
+            margin-bottom: 16px;
+        }
+
+        .route-item {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .route-icon {
+            font-size: 20px;
+        }
+
+        .route-text {
+            flex: 1;
+        }
+
+        .route-name {
+            font-size: 12px;
+            color: var(--gray);
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+        }
+
+        .route-address {
+            font-size: 14px;
+            color: var(--dark-gray);
+            font-weight: 600;
+        }
+
+        .ride-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            padding: 12px 0;
+            border-top: 1px solid var(--light-gray);
+            border-bottom: 1px solid var(--light-gray);
+            margin-bottom: 16px;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--gray);
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .btn-finish {
+            width: 100%;
+            background: var(--danger);
+            color: var(--white);
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-finish:active {
+            transform: scale(0.98);
+        }
+
+        /* HISTORY SCREEN */
+        .history-screen {
+            flex-direction: column;
+        }
+
+        .history-content {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+        }
+
+        .history-item {
+            background: var(--white);
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .history-date {
+            font-size: 11px;
+            color: var(--gray);
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .history-route {
+            font-size: 14px;
+            color: var(--dark-gray);
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .history-value {
+            font-weight: 700;
+            color: var(--success);
+            font-size: 16px;
+        }
+
+        /* EARNINGS SCREEN */
+        .earnings-screen {
+            flex-direction: column;
+        }
+
+        .earnings-content {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+        }
+
+        .earnings-card {
+            background: var(--primary);
+            color: var(--white);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            text-align: center;
+        }
+
+        .earnings-label {
+            font-size: 12px;
+            opacity: 0.9;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .earnings-value {
+            font-size: 40px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .earnings-subtitle {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .earnings-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .earnings-stat {
+            background: var(--white);
+            padding: 16px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .earnings-stat-label {
+            font-size: 11px;
+            color: var(--gray);
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .earnings-stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--gray);
+        }
+
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-text {
+            font-size: 14px;
+            color: var(--dark-gray);
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- HEADER -->
+        <div class="header" id="header">
+            <div class="header-left">
+                <button class="menu-toggle" onclick="toggleMenu()">☰</button>
+                <div class="header-title" id="headerTitle">
+                    <div class="header-icon">🚗</div>
+                    <span id="headerName">TIO</span>
+                </div>
+            </div>
+            <div class="header-status" id="headerStatus">Disponível</div>
+        </div>
+
+        <!-- SIDEBAR -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">🚗</div>
+                <div class="sidebar-user">
+                    <div class="sidebar-name">João Silva</div>
+                    <div class="sidebar-phone">(11) 98765-4321</div>
+                </div>
+            </div>
+            <ul class="sidebar-menu">
+                <li>
+                    <button class="active" onclick="switchScreen('dashboard'); toggleMenu()">
+                        <span class="sidebar-menu-icon">📍</span>
+                        Dashboard
+                    </button>
+                </li>
+                <li>
+                    <button onclick="switchScreen('history'); toggleMenu()">
+                        <span class="sidebar-menu-icon">📋</span>
+                        Histórico
+                    </button>
+                </li>
+                <li>
+                    <button onclick="switchScreen('earnings'); toggleMenu()">
+                        <span class="sidebar-menu-icon">💰</span>
+                        Ganhos
+                    </button>
+                </li>
+                <li>
+                    <button onclick="switchScreen('settings'); toggleMenu()">
+                        <span class="sidebar-menu-icon">⚙️</span>
+                        Configurações
+                    </button>
+                </li>
+            </ul>
+            <div class="sidebar-bottom">
+                <button onclick="switchScreen('login'); toggleMenu()">Sair</button>
+            </div>
+        </div>
+
+        <!-- OVERLAY -->
+        <div class="overlay" id="overlay" onclick="toggleMenu()"></div>
+
+        <!-- MAIN CONTENT -->
+        <div class="main">
+            <!-- LOGIN SCREEN -->
+            <div class="screen active login-screen" id="login">
+                <div class="login-container">
+                    <div class="login-logo">
+                        <div class="login-logo-circle">🚗</div>
+                        <div class="login-title">TIO</div>
+                        <div class="login-subtitle">Serviços Urbanos</div>
+                    </div>
+                    <form onsubmit="loginSubmit(event)">
+                        <div class="form-group">
+                            <label>Telefone</label>
+                            <input type="tel" placeholder="(11) 99999-9999" value="(11) 98765-4321">
+                        </div>
+                        <div class="form-group">
+                            <label>Senha</label>
+                            <input type="password" placeholder="Sua senha" value="123456">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Entrar</button>
+                    </form>
+                    <div class="signup-link">
+                        Não tem conta? <a onclick="switchScreen('register')">Cadastrar</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DASHBOARD SCREEN -->
+            <div class="screen dashboard-screen" id="dashboard">
+                <div class="map-container">
+                    <div class="map-marker">📍</div>
+                    <div class="map-info">
+                        <div class="map-info-status">✓ Localização ativa</div>
+                        <div class="map-info-text">Av. Paulista, São Paulo</div>
+                    </div>
+                </div>
+                <div class="dashboard-content">
+                    <div class="status-card">
+                        <div class="status-title">Você está</div>
+                        <div class="status-value">Disponível</div>
+                        <div class="status-badge">● ONLINE</div>
+                    </div>
+
+                    <div class="ride-card">
+                        <div class="ride-header">
+                            <div class="ride-title">Nova Corrida</div>
+                            <div class="ride-priority">⭐ Premium</div>
+                        </div>
+
+                        <div class="ride-detail">
+                            <div class="ride-icon">👤</div>
+                            <div class="ride-info">
+                                <div class="ride-label">Passageiro</div>
+                                <div class="ride-text">Maria Silva</div>
+                            </div>
+                            <div class="ride-value">⭐ 4.8</div>
+                        </div>
+
+                        <div class="ride-detail">
+                            <div class="ride-icon">📍</div>
+                            <div class="ride-info">
+                                <div class="ride-label">Origem</div>
+                                <div class="ride-text">Av. Paulista, 1000</div>
+                            </div>
+                        </div>
+
+                        <div class="ride-detail">
+                            <div class="ride-icon">📌</div>
+                            <div class="ride-info">
+                                <div class="ride-label">Destino</div>
+                                <div class="ride-text">Rua Augusta, 500</div>
+                            </div>
+                        </div>
+
+                        <div class="ride-detail">
+                            <div class="ride-icon">📏</div>
+                            <div class="ride-info">
+                                <div class="ride-label">Distância</div>
+                                <div class="ride-text">3.2 km</div>
+                            </div>
+                            <div class="ride-value">R$ 18,50</div>
+                        </div>
+
+                        <div class="ride-actions">
+                            <button class="btn-accept" onclick="switchScreen('ride-progress')">Aceitar</button>
+                            <button class="btn-decline">Recusar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIDE IN PROGRESS -->
+            <div class="screen dashboard-screen" id="ride-progress">
+                <div class="map-container">
+                    <div class="map-marker">🚗</div>
+                </div>
+                <div class="dashboard-content">
+                    <div class="ride-progress">
+                        <div class="passenger-card">
+                            <div class="passenger-avatar">MS</div>
+                            <div class="passenger-info">
+                                <div class="passenger-name">Maria Silva</div>
+                                <div class="passenger-rating">📞 (11) 98888-8888</div>
+                            </div>
+                        </div>
+
+                        <div class="route-section">
+                            <div class="route-item">
+                                <div class="route-icon">📍</div>
+                                <div class="route-text">
+                                    <div class="route-name">Origem</div>
+                                    <div class="route-address">Av. Paulista, 1000</div>
+                                </div>
+                            </div>
+                            <div class="route-item">
+                                <div class="route-icon">📌</div>
+                                <div class="route-text">
+                                    <div class="route-name">Destino</div>
+                                    <div class="route-address">Rua Augusta, 500</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="ride-stats">
+                            <div class="stat">
+                                <div class="stat-label">Distância</div>
+                                <div class="stat-value">3.2 km</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-label">Tempo</div>
+                                <div class="stat-value">12 min</div>
+                            </div>
+                        </div>
+
+                        <div class="ride-stats" style="margin-bottom: 0; border-top: none;">
+                            <div class="stat">
+                                <div class="stat-label">Valor</div>
+                                <div class="stat-value" style="color: var(--success);">R$ 18,50</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-label">Estimado</div>
+                                <div class="stat-value" style="color: var(--gray); font-size: 14px;">3.2 km</div>
+                            </div>
+                        </div>
+
+                        <button class="btn-finish" onclick="switchScreen('ride-complete')" style="margin-top: 16px;">Finalizar Corrida</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIDE COMPLETE -->
+            <div class="screen dashboard-screen" id="ride-complete">
+                <div class="map-container">
+                    <div class="map-marker">✅</div>
+                </div>
+                <div class="dashboard-content">
+                    <div class="ride-card" style="background: rgba(16, 185, 129, 0.05); border-left-color: var(--success);">
+                        <div class="ride-title" style="color: var(--success); text-align: center; margin-bottom: 16px;">✓ Corrida Finalizada</div>
+
+                        <div style="background: var(--primary); color: var(--white); padding: 20px; border-radius: 10px; text-align: center; margin-bottom: 16px;">
+                            <div class="ride-label">Ganho desta corrida</div>
+                            <div style="font-size: 36px; font-weight: 700; margin: 8px 0;">R$ 18,50</div>
+                        </div>
+
+                        <div class="ride-detail">
+                            <div class="ride-icon">👤</div>
+                            <div class="ride-info">
+                                <div class="ride-label">Passageiro</div>
+                                <div class="ride-text">Maria Silva</div>
+                            </div>
+                        </div>
+
+                        <div class="ride-detail">
+                            <div class="ride-icon">⏱️</div>
+                            <div class="ride-info">
+                                <div class="ride-label">Tempo</div>
+                                <div class="ride-text">14 min 32s</div>
+                            </div>
+                        </div>
+
+                        <div class="ride-detail">
+                            <div class="ride-icon">📏</div>
+                            <div class="ride-info">
+                                <div class="ride-label">Distância</div>
+                                <div class="ride-text">3.2 km</div>
+                            </div>
+                        </div>
+
+                        <div class="ride-detail">
+                            <div class="ride-icon">⭐</div>
+                            <div class="ride-info">
+                                <div class="ride-label">Avaliação</div>
+                                <div class="ride-text">⭐⭐⭐⭐⭐</div>
+                            </div>
+                        </div>
+
+                        <button class="btn-accept" onclick="switchScreen('dashboard')" style="margin-top: 16px;">Voltar ao Dashboard</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- HISTORY SCREEN -->
+            <div class="screen history-screen" id="history">
+                <div class="history-content">
+                    <div class="history-item">
+                        <div class="history-date">Hoje, 10:35</div>
+                        <div class="history-route">📍 Av. Paulista → Rua Augusta</div>
+                        <div class="history-value">+R$ 18,50</div>
+                    </div>
+                    <div class="history-item">
+                        <div class="history-date">Hoje, 09:45</div>
+                        <div class="history-route">📍 Pça da República → Vila Olímpia</div>
+                        <div class="history-value">+R$ 32,00</div>
+                    </div>
+                    <div class="history-item">
+                        <div class="history-date">Hoje, 08:20</div>
+                        <div class="history-route">📍 Jardins → Centro</div>
+                        <div class="history-value">+R$ 28,75</div>
+                    </div>
+                    <div class="history-item">
+                        <div class="history-date">Ontem, 19:10</div>
+                        <div class="history-route">📍 Consolação → Bela Vista</div>
+                        <div class="history-value">+R$ 15,20</div>
+                    </div>
+                    <div class="history-item">
+                        <div class="history-date">Ontem, 14:30</div>
+                        <div class="history-route">📍 Ibirapuera → Liberdade</div>
+                        <div class="history-value">+R$ 42,30</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EARNINGS SCREEN -->
+            <div class="screen earnings-screen" id="earnings">
+                <div class="earnings-content">
+                    <div class="earnings-card">
+                        <div class="earnings-label">Ganho de Hoje</div>
+                        <div class="earnings-value">R$ 94,75</div>
+                        <div class="earnings-subtitle">5 corridas completadas</div>
+                    </div>
+
+                    <div class="earnings-grid">
+                        <div class="earnings-stat">
+                            <div class="earnings-stat-label">Esta Semana</div>
+                            <div class="earnings-stat-value">R$ 487,30</div>
+                        </div>
+                        <div class="earnings-stat">
+                            <div class="earnings-stat-label">Este Mês</div>
+                            <div class="earnings-stat-value">R$ 1.850,50</div>
+                        </div>
+                    </div>
+
+                    <div class="ride-card">
+                        <div class="ride-title">Detalhes de Hoje</div>
+                        <div class="ride-detail">
+                            <div class="ride-icon">🚗</div>
+                            <div class="ride-info">
+                                <div class="ride-label">Corridas</div>
+                                <div class="ride-text">5</div>
+                            </div>
+                        </div>
+                        <div class="ride-detail">
+                            <div class="ride-icon">📏</div>
+                            <div class="ride-info">
+                                <div class="ride-label">Distância</div>
+                                <div class="ride-text">18.5 km</div>
+                            </div>
+                        </div>
+                        <div class="ride-detail">
+                            <div class="ride-icon">⏱️</div>
+                            <div class="ride-info">
+                                <div class="ride-label">Tempo Online</div>
+                                <div class="ride-text">3h 45m</div>
+                            </div>
+                        </div>
+                        <div class="ride-detail">
+                            <div class="ride-icon">⭐</div>
+                            <div class="ride-info">
+                                <div class="ride-label">Avaliação Média</div>
+                                <div class="ride-text">4.8</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SETTINGS SCREEN -->
+            <div class="screen earnings-screen" id="settings">
+                <div class="earnings-content">
+                    <div class="empty-state">
+                        <div class="empty-icon">⚙️</div>
+                        <div class="empty-text">Configurações em breve</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- REGISTER SCREEN -->
+            <div class="screen login-screen" id="register">
+                <div class="login-container">
+                    <div class="login-logo">
+                        <div class="login-logo-circle">📝</div>
+                        <div class="login-title">Cadastro</div>
+                    </div>
+                    <form onsubmit="switchScreen(event, 'dashboard')">
+                        <div class="form-group">
+                            <label>Nome completo</label>
+                            <input type="text" placeholder="João Silva">
+                        </div>
+                        <div class="form-group">
+                            <label>Telefone</label>
+                            <input type="tel" placeholder="(11) 99999-9999">
+                        </div>
+                        <div class="form-group">
+                            <label>Placa do veículo</label>
+                            <input type="text" placeholder="ABC-1234">
+                        </div>
+                        <div class="form-group">
+                            <label>Senha</label>
+                            <input type="password" placeholder="Crie uma senha">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Cadastrar</button>
+                    </form>
+                    <div class="signup-link">
+                        Já tem conta? <a onclick="switchScreen(event, 'login')">Fazer login</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleMenu() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('overlay');
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('open');
+        }
+
+        function switchScreen(screen) {
+            document.querySelectorAll('.screen').forEach(el => {
+                el.classList.remove('active');
+            });
+            document.getElementById(screen).classList.add('active');
+
+            // Update header
+            const header = document.getElementById('header');
+            if (screen === 'login' || screen === 'register') {
+                header.style.display = 'none';
+            } else {
+                header.style.display = 'flex';
+            }
+
+            // Update menu active state
+            document.querySelectorAll('.sidebar-menu button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+        }
+
+        function loginSubmit(e) {
+            e.preventDefault();
+            switchScreen('dashboard');
+        }
+    </script>
+</body>
+</html>
