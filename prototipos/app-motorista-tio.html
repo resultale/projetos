@@ -75,9 +75,9 @@
         }
 
         .header-icon {
-            width: 28px;
-            height: 28px;
-            background: var(--accent);
+            width: 32px;
+            height: 32px;
+            background: transparent;
             border-radius: 6px;
             display: flex;
             align-items: center;
@@ -85,6 +85,12 @@
             font-weight: bold;
             color: var(--primary);
             font-size: 16px;
+        }
+
+        .header-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
         }
 
         .header-status {
@@ -123,9 +129,9 @@
         }
 
         .sidebar-logo {
-            width: 40px;
-            height: 40px;
-            background: var(--accent);
+            width: 48px;
+            height: 48px;
+            background: transparent;
             border-radius: 8px;
             display: flex;
             align-items: center;
@@ -133,6 +139,12 @@
             font-weight: bold;
             color: var(--primary);
             font-size: 20px;
+        }
+
+        .sidebar-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
         }
 
         .sidebar-user {
@@ -270,9 +282,9 @@
         }
 
         .login-logo-circle {
-            width: 80px;
-            height: 80px;
-            background: var(--accent);
+            width: 120px;
+            height: 120px;
+            background: transparent;
             border-radius: 16px;
             margin: 0 auto 16px;
             display: flex;
@@ -281,7 +293,12 @@
             font-size: 40px;
             font-weight: bold;
             color: var(--primary);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+        }
+
+        .login-logo-circle img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
         }
 
         .login-title {
@@ -843,7 +860,7 @@
             <div class="header-left">
                 <button class="menu-toggle" onclick="toggleMenu()">☰</button>
                 <div class="header-title" id="headerTitle">
-                    <div class="header-icon">🚗</div>
+                    <div class="header-icon"><img src="logo-tio.jpg" alt="TIO"></div>
                     <span id="headerName">TIO</span>
                 </div>
             </div>
@@ -853,7 +870,7 @@
         <!-- SIDEBAR -->
         <div class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <div class="sidebar-logo">🚗</div>
+                <div class="sidebar-logo"><img src="logo-tio.jpg" alt="TIO"></div>
                 <div class="sidebar-user">
                     <div class="sidebar-name">João Silva</div>
                     <div class="sidebar-phone">(11) 98765-4321</div>
@@ -899,7 +916,7 @@
             <div class="screen active login-screen" id="login">
                 <div class="login-container">
                     <div class="login-logo">
-                        <div class="login-logo-circle">🚗</div>
+                        <div class="login-logo-circle"><img src="logo-tio.jpg" alt="TIO - Serviços Urbanos"></div>
                         <div class="login-title">TIO</div>
                         <div class="login-subtitle">Serviços Urbanos</div>
                     </div>
@@ -1193,7 +1210,7 @@
             <div class="screen login-screen" id="register">
                 <div class="login-container">
                     <div class="login-logo">
-                        <div class="login-logo-circle">📝</div>
+                        <div class="login-logo-circle"><img src="logo-tio.jpg" alt="TIO - Cadastro"></div>
                         <div class="login-title">Cadastro</div>
                     </div>
                     <form onsubmit="switchScreen(event, 'dashboard')">
