@@ -2,6 +2,23 @@
 
 Registro de tudo que foi feito na auditoria de hoje, pra retomar a conversa sobre o item pendente (revoke de RPCs) assim que possível.
 
+## ✅ Revoke de RPCs — FECHADO, confirmado contra o app real
+
+O app real é `github.com/resultale/tio-motorista-flutter` (Flutter/Dart) — não o `tio-motorista` (React Native) usado antes. Repo real clonado e conferido diretamente: `lib/core/services/supabase_service.dart` tem inclusive uma lista explícita `_rpcsComSessao` no próprio código, que é a fonte da verdade de quais RPCs usam `p_sessao_token`.
+
+Cruzando **todas** as chamadas `.rpc(...)` reais do app (31 funções distintas) contra os grants atuais no banco: **100% cobertas** (`anon` e `authenticated` com `EXECUTE` liberado em todas). Restaurei 6 funções que tinham sido cortadas por engano no revoke original (baseado no repo errado), além das 2 já restauradas antes:
+
+`app_detalhe_solicitacao`, `app_excluir_endereco`, `app_listar_enderecos`, `app_ofertas_pendentes_sistema`, `app_revogar_sessao`, `app_salvar_endereco` (+ `app_enviar_mensagem_suporte`, `app_historico_suporte`, restauradas antes).
+
+Nenhuma das ~115 funções de negócio internas (`aceitar_solicitacao`, `criar_solicitacao`, `processar_pagamento_asaas`, etc.) é chamada pelo app real — seguem corretamente bloqueadas pra `anon`/`authenticated`, só acessíveis via n8n (conexão Postgres direta) e `service_role`.
+
+**Item fechado, sem mais pendência.**
+
+---
+
+<details>
+<summary>Histórico da investigação (repo errado usado inicialmente)</summary>
+
 ## ⚠️ Atualização sobre o revoke de RPCs — parcialmente reconferido
 
 Revoguei o acesso de `anon`/`authenticated` (API pública/logada do Supabase) a ~115 funções de negócio (`aceitar_solicitacao`, `criar_solicitacao`, `processar_pagamento_asaas`, `solicitar_saque_motorista`, etc.), mantendo só as funções `app_*` e `dashboard_*` acessíveis.
@@ -15,6 +32,8 @@ Comparando com o que eu tinha preservado: **2 funções reais foram cortadas por
 As outras funções que cortei e que só apareciam no repo errado (`app_aprovar_veiculo`, `app_excluir_endereco`, `app_listar_enderecos`, `app_salvar_endereco`, `app_ofertas_pendentes_sistema`, `app_revogar_sessao`, `app_status_tarifa_chuva`, `app_detalhe_solicitacao`, `verificar_otp_cadastro` sem `_v2`) **não têm** `p_sessao_token` — ou são de uso do dashboard (ex: `app_aprovar_veiculo` recebe `p_operador_telefone`, não telefone do motorista) ou são versões antigas pré-retrofit. Ficam cortadas, condizente com o nome da própria migration antiga (`travar_funcoes_nao_usadas_pelo_app`).
 
 **Ainda assim, vale conferir com calma quando você abrir no PC** — essa checagem via `p_sessao_token` é uma evidência forte mas indireta; o ideal é confirmar contra o código do app real de verdade assim que tiver o repositório certo.
+
+</details>
 
 ---
 
@@ -49,9 +68,7 @@ As outras funções que cortei e que só apareciam no repo errado (`app_aprovar_
 
 `app_aceitar_oferta`, `app_atualizar_nome`, `app_avancar_etapa`, `app_cadastrar_chave_pix`, `app_cadastrar_veiculo`, `app_config_publica`, `app_consultar_ganhos`, `app_corridas_ativas`, `app_definir_disponibilidade`, `app_definir_tipos_servico`, `app_historico_movimentacoes`, `app_home_motorista`, `app_listar_veiculos`, `app_oferta_pendente`, `app_recusar_oferta`, `app_registrar_dispositivo_push`, `app_resumo_financeiro`, `app_solicitar_saque`, `app_status_acesso`, `app_tem_senha_saque`, `app_trocar_veiculo_ativo`, `atualizar_localizacao`, `calcular_dre_periodo`, `calcular_metricas_dia`, `dashboard_alternar_servico_cidade`, `dashboard_aprovar_veiculo`, `dashboard_atualizar_cidade`, `dashboard_atualizar_cupom`, `dashboard_atualizar_franquia`, `dashboard_atualizar_status_etapa_plano`, `dashboard_atualizar_tarifa`, `dashboard_buscar_usuarios`, `dashboard_comentar_etapa_plano`, `dashboard_conciliacao_comissoes`, `dashboard_config_sistema_get`, `dashboard_config_sistema_set`, `dashboard_criar_cidade`, `dashboard_criar_cupom`, `dashboard_criar_franquia`, `dashboard_criar_operador`, `dashboard_definir_forma_cobranca`, `dashboard_definir_tarifa_minimo_km_excedente`, `dashboard_executar_saque`, `dashboard_extrato_usuario`, `dashboard_lancamentos_financeiros`, `dashboard_resumo_financeiro`, `dashboard_upsert_tarifa`, `dashboard_upsert_taxa_fixa_por_corrida`, `dashboard_validar_entrega_retida`, `dashboard_visao_geral_hoje`, `dashboard_voltar_tarifa_simples`, `definir_senha_saque`, `gerar_otp_cadastro`, `obter_cidade_id_operador_logado`, `obter_cidades_cobertas_operador_logado`, `obter_franquia_id_operador_logado`, `obter_nivel_operador_logado`, `verificar_otp_cadastro_v2`.
 
-As `dashboard_*` e as 3 `obter_*_operador_logado` estão confirmadas certas (dashboard é o real). Das `app_*`, 21 delas + `atualizar_localizacao` foram confirmadas via `p_sessao_token` no banco. `app_cadastrar_chave_pix`, `app_config_publica`, `definir_senha_saque`, `gerar_otp_cadastro`, `verificar_otp_cadastro_v2` não têm `p_sessao_token` (fazem sentido sem sessão — são fluxo de pré-cadastro/OTP, antes de existir sessão) mas não foram confirmadas com a mesma evidência direta; ficaram mantidas por segurança, mas vale reconferir.
-
-**Restauradas hoje** (cortadas por engano, depois confirmadas reais via `p_sessao_token`): `app_enviar_mensagem_suporte`, `app_historico_suporte`.
+**Atualizado:** essa lista foi 100% confirmada contra o app real (`tio-motorista-flutter`) — ver seção no topo do documento. Todas as 31 funções que o app chama estão liberadas para `anon`/`authenticated`.
 
 ## Projeto Supabase
 `okctljhosqdtmtflamgi` (tioOficial) — **não** `dfgbrksuovievxxchcix` (tioMob, antigo/inativo).
