@@ -1,5 +1,17 @@
 # Auditoria TIO — n8n + Supabase — 12/09/2026
 
+## ✅ WF_CORRIDA — testes de usabilidade + guardrail de endereço impreciso
+
+Rodei cenários reais direto na RPC `processar_corrida_completa` (usando telefones de teste, sem disparar WhatsApp): rua numa msg + número em outra (OK, o prompt do extrator já junta), tudo junto numa msg (OK), tudo picado em vários turnos (OK, fechou com valor e troco calculados certos), dúvida no meio da coleta (OK, `cotar_preco_corrida` não mexe no estado salvo).
+
+**Achado corrigido:** quando o endereço geocodificava com baixa confiança (`origem_confianca_baixa`/`destino_confianca_baixa`), o sistema já sinalizava a flag mas liberava `pronto_para_resumo=true` mesmo assim — dependia só do Agent (LLM) decidir perguntar antes de seguir, mesma categoria de risco do bug do PIX. Implementado guardrail determinístico:
+- RPC `processar_corrida_completa` ganhou parâmetro `p_confirmar_endereco_impreciso` + persiste `origem_confianca_confirmada`/`destino_confianca_confirmada` no `conversation_state.contexto` — `pronto_para_resumo` agora fica bloqueado (`campos_faltantes` ganha `origem_confirmar`/`destino_confirmar`) até confirmação explícita.
+- Node `Chamar_Processar_Corrida_Deterministico` (n8n) passa esse novo parâmetro automaticamente sempre que o cliente manda uma confirmação curta ("sim"/"ok"/"pode").
+- Prompt do `Agent_tio` atualizado com a pergunta específica pros dois novos campos.
+- Testado ponta a ponta via SQL: bloqueia sem confirmação, libera e recalcula certo depois do "sim".
+- A regra de cidade (destino usa a mesma cidade detectada na origem, cliente não precisa repetir) já existia no código antes de hoje — confirmado lendo a função, sem necessidade de mudança.
+
+
 Registro de tudo que foi feito na auditoria de hoje, pra retomar a conversa sobre o item pendente (revoke de RPCs) assim que possível.
 
 ## ✅ Revoke de RPCs — FECHADO, confirmado contra o app real
