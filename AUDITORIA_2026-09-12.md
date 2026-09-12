@@ -2,17 +2,19 @@
 
 Registro de tudo que foi feito na auditoria de hoje, pra retomar a conversa sobre o item pendente (revoke de RPCs) assim que possível.
 
-## ⚠️ PENDÊNCIA CRÍTICA — precisa de confirmação sua
+## ⚠️ Atualização sobre o revoke de RPCs — parcialmente reconferido
 
 Revoguei o acesso de `anon`/`authenticated` (API pública/logada do Supabase) a ~115 funções de negócio (`aceitar_solicitacao`, `criar_solicitacao`, `processar_pagamento_asaas`, `solicitar_saque_motorista`, etc.), mantendo só as funções `app_*` e `dashboard_*` acessíveis.
 
-**O problema:** eu mapeei a lista de funções "seguras" (que devem continuar acessíveis) analisando o código do app do motorista no repo `resultale/tio-motorista`. Você me avisou depois que **esse app não é o real usado em produção** — foi feito por outra pessoa e não emplacou. O dashboard (pasta `dashboard/` do mesmo repo) você confirmou que **é** o real.
+**O que aconteceu:** eu mapeei a lista de funções "seguras" analisando o código do app do motorista no repo `resultale/tio-motorista`. Você avisou depois que **esse app não é o real usado em produção** (dashboard, na mesma pasta `dashboard/`, é o real).
 
-**Risco:** se o app do motorista de verdade (que eu não vi) chama alguma função de negócio que não seja `app_*`/`dashboard_*`, o revoke pode ter quebrado alguma ação real de motorista (aceitar corrida, sacar, etc. — dependendo de como o app real chama o banco).
+**O que eu fiz pra reconferir sem depender do repo errado:** achei no histórico de migrations do Supabase uma migration de 30/08 chamada `infra_sessao_app_motorista` + `retrofit_sessao_funcoes_app_motorista` (1/2/3) — evidência de que existe uma trava de sessão (`p_sessao_token`) retrofitada especificamente nas funções realmente usadas pelo app em produção. Usei isso (direto no banco, não no repo) pra achar a lista definitiva: **22 funções `app_*`/`atualizar_localizacao` têm esse parâmetro `p_sessao_token`** — essas são confirmadas como reais.
 
-**Decisão combinada:** deixar como está por enquanto (não reverti nada), você confirma o repositório do app real quando puder e a gente reprocessa a lista seguindo o mesmo método (grep de `.rpc(...)` no código real) antes de decidir manter ou reverter.
+Comparando com o que eu tinha preservado: **2 funções reais foram cortadas por engano** (`app_enviar_mensagem_suporte`, `app_historico_suporte` — têm `p_sessao_token` mas não apareciam no código do repo errado). **Já restaurei o acesso das 2** (`GRANT EXECUTE ... TO anon, authenticated`), confirmado no banco.
 
-**Se precisar reverter rápido antes disso**, o comando é: reconceder `EXECUTE` de volta a `PUBLIC` nas funções de negócio (a lista completa de funções tocadas está no final deste arquivo).
+As outras funções que cortei e que só apareciam no repo errado (`app_aprovar_veiculo`, `app_excluir_endereco`, `app_listar_enderecos`, `app_salvar_endereco`, `app_ofertas_pendentes_sistema`, `app_revogar_sessao`, `app_status_tarifa_chuva`, `app_detalhe_solicitacao`, `verificar_otp_cadastro` sem `_v2`) **não têm** `p_sessao_token` — ou são de uso do dashboard (ex: `app_aprovar_veiculo` recebe `p_operador_telefone`, não telefone do motorista) ou são versões antigas pré-retrofit. Ficam cortadas, condizente com o nome da própria migration antiga (`travar_funcoes_nao_usadas_pelo_app`).
+
+**Ainda assim, vale conferir com calma quando você abrir no PC** — essa checagem via `p_sessao_token` é uma evidência forte mas indireta; o ideal é confirmar contra o código do app real de verdade assim que tiver o repositório certo.
 
 ---
 
@@ -47,7 +49,9 @@ Revoguei o acesso de `anon`/`authenticated` (API pública/logada do Supabase) a 
 
 `app_aceitar_oferta`, `app_atualizar_nome`, `app_avancar_etapa`, `app_cadastrar_chave_pix`, `app_cadastrar_veiculo`, `app_config_publica`, `app_consultar_ganhos`, `app_corridas_ativas`, `app_definir_disponibilidade`, `app_definir_tipos_servico`, `app_historico_movimentacoes`, `app_home_motorista`, `app_listar_veiculos`, `app_oferta_pendente`, `app_recusar_oferta`, `app_registrar_dispositivo_push`, `app_resumo_financeiro`, `app_solicitar_saque`, `app_status_acesso`, `app_tem_senha_saque`, `app_trocar_veiculo_ativo`, `atualizar_localizacao`, `calcular_dre_periodo`, `calcular_metricas_dia`, `dashboard_alternar_servico_cidade`, `dashboard_aprovar_veiculo`, `dashboard_atualizar_cidade`, `dashboard_atualizar_cupom`, `dashboard_atualizar_franquia`, `dashboard_atualizar_status_etapa_plano`, `dashboard_atualizar_tarifa`, `dashboard_buscar_usuarios`, `dashboard_comentar_etapa_plano`, `dashboard_conciliacao_comissoes`, `dashboard_config_sistema_get`, `dashboard_config_sistema_set`, `dashboard_criar_cidade`, `dashboard_criar_cupom`, `dashboard_criar_franquia`, `dashboard_criar_operador`, `dashboard_definir_forma_cobranca`, `dashboard_definir_tarifa_minimo_km_excedente`, `dashboard_executar_saque`, `dashboard_extrato_usuario`, `dashboard_lancamentos_financeiros`, `dashboard_resumo_financeiro`, `dashboard_upsert_tarifa`, `dashboard_upsert_taxa_fixa_por_corrida`, `dashboard_validar_entrega_retida`, `dashboard_visao_geral_hoje`, `dashboard_voltar_tarifa_simples`, `definir_senha_saque`, `gerar_otp_cadastro`, `obter_cidade_id_operador_logado`, `obter_cidades_cobertas_operador_logado`, `obter_franquia_id_operador_logado`, `obter_nivel_operador_logado`, `verificar_otp_cadastro_v2`.
 
-As `dashboard_*` e as 3 `obter_*_operador_logado` estão confirmadas certas (dashboard é o real). As `app_*` e as 4 soltas (`atualizar_localizacao`, `definir_senha_saque`, `gerar_otp_cadastro`, `verificar_otp_cadastro_v2`) vieram do app errado — **precisam ser reconferidas contra o app real**.
+As `dashboard_*` e as 3 `obter_*_operador_logado` estão confirmadas certas (dashboard é o real). Das `app_*`, 21 delas + `atualizar_localizacao` foram confirmadas via `p_sessao_token` no banco. `app_cadastrar_chave_pix`, `app_config_publica`, `definir_senha_saque`, `gerar_otp_cadastro`, `verificar_otp_cadastro_v2` não têm `p_sessao_token` (fazem sentido sem sessão — são fluxo de pré-cadastro/OTP, antes de existir sessão) mas não foram confirmadas com a mesma evidência direta; ficaram mantidas por segurança, mas vale reconferir.
+
+**Restauradas hoje** (cortadas por engano, depois confirmadas reais via `p_sessao_token`): `app_enviar_mensagem_suporte`, `app_historico_suporte`.
 
 ## Projeto Supabase
 `okctljhosqdtmtflamgi` (tioOficial) — **não** `dfgbrksuovievxxchcix` (tioMob, antigo/inativo).
