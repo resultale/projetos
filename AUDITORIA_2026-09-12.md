@@ -215,6 +215,19 @@ Testado via SQL direto e via webhook real: destinatário sem cadastro (`55149000
 
 **Nota lateral (não corrigida, fora do escopo pedido):** `processar_entrega_completa` e outras RPCs do projeto têm `EXECUTE` concedido a `anon`/`authenticated` além de `postgres` — parece ser o comportamento padrão do Supabase ao criar funções no schema `public`, não algo introduzido nesta sessão. Vale uma auditoria de grants à parte se o Edvaldo quiser revisar.
 
+### (12) Resumo de entrega com valor_pedido: separar "Valor Entrega" de "Valor Pedido" + corrigir soma do total cobrado
+
+Depois da correção da seção 11, o Edvaldo apontou que "💰 Valor: R$ 9,00" sozinho ficava ambíguo — parecia o valor total, quando era só o valor da entrega. Junto com isso, achamos (ele + teste real) um segundo bug: a linha "📦 O motorista vai cobrar R$ [valor_pedido]..." mostrava só o valor do pedido, sem somar o valor da entrega — no teste, pedido=R$25 + entrega=R$9 deveria totalizar R$34, mas o resumo mostrava R$25.
+
+Corrigido em `gerenciar_confirmacao_pagamento` (nova assinatura, 2 parâmetros novos no final — `p_valor_pedido`, `p_forma_pagamento_pedido` — com `DEFAULT NULL`, então as chamadas existentes em `WF_CORRIDA` continuam funcionando sem alteração nenhuma, confirmado por teste direto antes de dropar o overload antigo):
+- Quando há `valor_pedido` (só estabelecimento cobrando), o bloco de valor fica `💰 Valor Entrega: R$ X` + `💰 Valor Pedido: R$ Y`, nunca mais um "Valor:" ambíguo.
+- A linha "motorista vai cobrar" também é removida do texto livre do Agent e reconstruída deterministicamente com a SOMA (`valor_original + valor_pedido`), igual a lógica que `aceitar_solicitacao` já usa depois.
+- `Checar_Pagamento_Confirmado` (WF_ENTREGA) passou a selecionar também `valor_pedido`/`forma_pagamento_pedido` do contexto, e o node `Gerenciar_Confirmacao_Pagamento` passa esses dois campos a mais pra função.
+
+**Efeito colateral achado no processo:** a detecção de "isso é um resumo final" dentro dessa função dependia de frases fixas ("fechando os detalhes", depois "resumo da sua") — o Agent varia a abertura da mensagem livremente ("Beleza, já tá tudo pronto!", "Show! Já fechei os detalhes...") e a correção simplesmente não rodava nesses casos, silenciosamente. Trocado para depender só de marcadores estruturais que o template sempre exige (emoji de endereço `📍` + a palavra "valor" + "posso confirmar/gerar"), testado e confirmado funcionando via webhook real mesmo com a frase de abertura variando.
+
+Validado via teste real ponta a ponta (execução 95099): mensagem "entrega 8 reais, pedido 25 reais dinheiro" → resumo final mostrou "💰 Valor Entrega: R$ 9,00 / 💰 Valor Pedido: R$ 25,00 / 📦 O motorista vai cobrar R$ 34,00".
+
 ### Ainda não mexido (menor prioridade / fora do escopo SQL)
 - 3 extensions no schema `public` (`pg_net`, `http`, `unaccent`) — mover exige recriar e reapontar todas as referências, mais arriscado.
 - "Leaked password protection" desligado no Auth — é toggle no painel do Supabase, não dá pra mudar por SQL.
