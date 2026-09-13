@@ -1,5 +1,16 @@
 # Auditoria TIO — n8n + Supabase — 12/09/2026 (+ 13/09/2026)
 
+## 🆕 13/09/2026 (7) — Correção de regra de negócio: tiopay não é fixo, depende da cobrança do pedido
+
+O Edvaldo corrigiu a lógica implementada no item anterior: **`tiopay` não é o padrão sempre** — é só quando o pedido **já foi pago** (`decisao_cobranca_pedido='ja_pago'`). Quando o motorista **precisa cobrar o pedido** (`decisao_cobranca_pedido='cobrar'`), ele cobra o pedido **e o frete juntos**, na mesma hora, do destinatário — a forma de pagamento do frete nesse caso é a mesma do pedido (`forma_pagamento_pedido`), nunca tiopay.
+
+**Corrigido:**
+- `processar_entrega_completa`: `forma_pagamento` do frete agora deriva de `decisao_cobranca_pedido` — `cobrar` → acompanha `forma_pagamento_pedido` (dinheiro/pix/cartão); `ja_pago` (ou ainda não respondido) → `tiopay`.
+- `aceitar_solicitacao`: "Total a cobrar do cliente na entrega" agora **sempre soma pedido + frete** quando `decisao_cobranca_pedido='cobrar'` (antes só somava se o frete por acaso fosse `dinheiro`, o que nunca acontecia com a regra errada anterior).
+- Texto da ferramenta no n8n atualizado pra refletir a regra certa e reforçar que o Agent nunca deve perguntar forma de pagamento do frete separadamente — é 100% automático.
+
+**Testado via SQL direto antes de publicar:** `cobrar` + `forma_pagamento_pedido='pix'` → frete sai `pix` corretamente; `ja_pago` → frete sai `tiopay`; aceite do motorista com pedido R$45 + frete R$8 (cobrar) → "Total a cobrar do cliente na entrega: R$53,00" (correto, soma os dois).
+
 ## 🆕 13/09/2026 (6) — Cenário "cobrar" completo, ponta a ponta (Galegos → Edvaldo)
 
 **Bug corrigido antes do teste:** ao tornar `tiopay` o padrão do frete pra estabelecimento (item anterior), a seção "CONFIRMAÇÃO DO CLIENTE" do prompt só sabia tratar `pix` vs `dinheiro/cartão` — não tinha instrução pra `tiopay`, o que travaria a criação da solicitação. Corrigido: `tiopay` agora entra no mesmo grupo de dinheiro/cartão (cria a solicitação direto, sem gerar Pix).
