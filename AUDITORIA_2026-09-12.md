@@ -251,6 +251,18 @@ Corrigido no Flutter (branch `claude/oferta-valor-pedido`, push feito, PR ainda 
 
 **Não foi possível rodar `flutter analyze`/build** (Flutter não está instalado neste ambiente) — revisão feita manualmente linha a linha. Recomendo rodar o analyzer antes de mergear a branch.
 
+### (15) CRÍTICO: motorista ficava com o dinheiro do pedido da loja sem gerar dívida no TioPay
+
+Edvaldo apontou uma regra que faltava: quando o motorista recebe em dinheiro/cartão na entrega (cobrando pedido+entrega do cliente final, `decisao_cobranca_pedido='cobrar'`), ele fica fisicamente com esse dinheiro — mas o valor do pedido pertence à loja, não a ele. O saldo TioPay dele precisa ficar negativo nesse valor (comissão da entrega + valor do pedido), pra ele ter que pagar via Pix no TioPay ou abater de saldo futuro.
+
+Investigando `fechar_comissao_entrega` (chamada na conclusão da entrega, gera a movimentação financeira final), descobri que **esse mecanismo de dívida já existe no sistema** — mas só para um fluxo antigo/diferente (pedidos via `criar_pedido_estabelecimento`/WF_DELIVERY, que grava `dados_coletados->>'origem_pedido'='estabelecimento_direto'` + `cobra_produto`/`valor_produto`). O fluxo atual do WhatsApp (WF_ENTREGA, `decisao_cobranca_pedido`/`valor_pedido`, implementado nas seções 10-14 desta auditoria) usa nomes de campo **diferentes**, que a função não reconhecia. Resultado: no cenário testado nas seções 11-14 (motorista cobra R$34 = R$9 entrega + R$25 pedido, em dinheiro), ao finalizar a entrega o sistema só ia debitar a comissão sobre os R$9 da entrega — o motorista ficaria com os R$25 do pedido da loja sem nenhum registro de dívida. **Bug real, não hipotético, que eu mesmo teria deixado passar se o Edvaldo não tivesse lembrado da regra.**
+
+Corrigido em `fechar_comissao_entrega`: passou a também ler `dados_coletados->>'decisao_cobranca_pedido'` e `dados_coletados->>'valor_pedido'` (nomenclatura do WF_ENTREGA) e somar `valor_pedido` ao débito de dívida quando `decisao_cobranca_pedido='cobrar'`, ao lado do caminho antigo (`origem_pedido='estabelecimento_direto'`, mantido intacto, não removido). Motivo do lançamento no extrato do motorista também menciona explicitamente "+ R$X do pedido cobrado do cliente (repassar pra loja)", pra ficar claro pra ele por que a dívida é maior que só a comissão.
+
+**Validado com um teste seguro** (tudo dentro de `BEGIN; ... ROLLBACK;` — solicitação de teste inserida, função chamada, saldo conferido, e tudo desfeito ao final, sem deixar rastro nem tocar em conta real): motorista com saldo R$4,04 → entrega R$9,00 (comissão R$1,80, 20%) + pedido R$25,00 cobrado em dinheiro → saldo final **R$-22,76** (= 4,04 - 1,80 - 25,00) e `cobranca_gerada=true` (dívida gerada automaticamente, motorista fica bloqueado até quitar). Exatamente o comportamento pedido.
+
+**Nota:** o valor do pedido debitado do motorista fica só como dívida genérica no TioPay dele — a função não credita esse valor de volta pra conta da loja/estabelecimento (o fluxo antigo `estabelecimento_direto` também não faz isso). Se o Edvaldo quiser que o valor do pedido seja creditado automaticamente pra loja também (não só descontado do motorista), isso é uma extensão separada, não implementada agora — não foi pedido explicitamente, só a parte da dívida do motorista.
+
 ### Ainda não mexido (menor prioridade / fora do escopo SQL)
 - 3 extensions no schema `public` (`pg_net`, `http`, `unaccent`) — mover exige recriar e reapontar todas as referências, mais arriscado.
 - "Leaked password protection" desligado no Auth — é toggle no painel do Supabase, não dá pra mudar por SQL.
