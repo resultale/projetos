@@ -228,6 +228,14 @@ Corrigido em `gerenciar_confirmacao_pagamento` (nova assinatura, 2 parâmetros n
 
 Validado via teste real ponta a ponta (execução 95099): mensagem "entrega 8 reais, pedido 25 reais dinheiro" → resumo final mostrou "💰 Valor Entrega: R$ 9,00 / 💰 Valor Pedido: R$ 25,00 / 📦 O motorista vai cobrar R$ 34,00".
 
+### (13) App do motorista (tela de oferta) não mostrava o valor do pedido a cobrar
+
+Mesmo problema da seção 12, mas do lado do app do motorista (`tio-motorista-flutter`): a RPC `app_oferta_pendente` (que alimenta a tela de oferta no app, chamada com o token de sessão do motorista) só retornava `valor_cliente` = valor da entrega, sem nenhuma informação sobre o valor do pedido quando é entrega de estabelecimento com `decisao_cobranca_pedido='cobrar'` — o motorista aceitava a oferta sem saber que também precisaria cobrar o pedido do cliente final na entrega.
+
+Corrigido em `app_oferta_pendente` (assinatura não mudou, sem risco de overload): lê `valor_pedido`, `forma_pagamento_pedido` e `decisao_cobranca_pedido` de `solicitacoes.dados_coletados` (já gravados por `criar_solicitacao_entrega_direta` via `p_extras`) e retorna também `valor_total_cobrar_cliente` (soma de `valor_cliente` + `valor_pedido`, calculado só quando `decisao_cobranca_pedido='cobrar'`).
+
+Testado a lógica isoladamente via SQL (entrega R$9 + pedido R$25 → `valor_total_cobrar_cliente=34.00`, batendo com o resumo do WhatsApp da seção 12). **Não testado ponta a ponta com broadcast real** (exigiria completar o fluxo até "sim"/criar solicitação de verdade, o que dispara oferta pra um motorista de teste). **Pendência:** o app Flutter (repositório separado, fora do escopo deste repo) precisa ser atualizado pra ler e exibir os novos campos (`valor_pedido`, `forma_pagamento_pedido`, `valor_total_cobrar_cliente`) na tela de oferta — o backend já está pronto e retornando esses dados.
+
 ### Ainda não mexido (menor prioridade / fora do escopo SQL)
 - 3 extensions no schema `public` (`pg_net`, `http`, `unaccent`) — mover exige recriar e reapontar todas as referências, mais arriscado.
 - "Leaked password protection" desligado no Auth — é toggle no painel do Supabase, não dá pra mudar por SQL.
