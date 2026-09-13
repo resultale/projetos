@@ -1,5 +1,22 @@
 # Auditoria TIO — n8n + Supabase — 12/09/2026 (+ 13/09/2026)
 
+## 🆕 13/09/2026 (2) — Entrega de ESTABELECIMENTO (WF_ENTREGA): defaults + cobrança na entrega
+
+Motor **separado** do cardápio/delivery: é o `WF_ENTREGA`, usado tanto por cliente comum (entrega pessoa-a-pessoa, sem nada a cobrar do destinatário) quanto por conta **estabelecimento** (loja pedindo pra Tio entregar um pedido já vendido por ela a um cliente dela). Toda a lógica nova abaixo é **exclusiva de estabelecimento** (`v_eh_estabelecimento`/`eh_estabelecimento`) — entregas de cliente comum continuam exatamente como eram (origem+destino+veículo+forma de pagamento+tarifa por distância, sem nenhuma pergunta nova).
+
+**Padronização pra reduzir fricção do estabelecimento** (`processar_entrega_completa`):
+- **Veículo**: se o estabelecimento não especificar, assume `moto_entrega` automaticamente (não pergunta).
+- **Valor do frete**: nunca mais oferece "calcular pela distância" pro estabelecimento — ele já vendeu o frete pro cliente dele, então tem que informar o valor direto (a não ser que já tenha tarifa própria pré-cadastrada, que já é usada automaticamente).
+- **Nova decisão obrigatória — `decisao_cobranca_pedido`** (`'cobrar'` ou `'ja_pago'`): todo pedido de entrega de estabelecimento agora exige essa resposta explícita (nunca fica implícito/pulado). Se `'cobrar'`: exige também `valor_pedido` (valor do produto) e `forma_pagamento_pedido`. Se `'ja_pago'`: segue sem mais perguntas.
+- Tudo testado ponta a ponta via SQL com conta de teste temporariamente marcada como estabelecimento (revertido depois).
+
+**Mensagem do motorista/entregador ao aceitar** (`aceitar_solicitacao`) — quando é entrega de estabelecimento com `decisao_cobranca_pedido='cobrar'`, agora mostra separado:
+- 💰 quanto ele **ganha** pela entrega (like já era, comissão descontada);
+- 📦 quanto é o **produto** a cobrar do destinatário (`valor_pedido` + forma de pagamento combinada);
+- 💰 o **total a cobrar do destinatário na entrega** (produto + valor da entrega, só soma o frete se a entrega em si também for paga em dinheiro na hora; se o frete já foi pago separado via Pix/cartão/TioPay, o total é só o produto).
+
+Pra isso, o node `Criar_Solicitacao_Entrega` (n8n) passou a gravar `decisao_cobranca_pedido` dentro de `solicitacoes.dados_coletados` (antes só `valor_pedido`/`forma_pagamento_pedido` eram salvos — a decisão em si não estava sendo persistida, então o motorista nunca teria essa info). Testado via SQL com solicitação de entrega fictícia (`decisao_cobranca_pedido='cobrar'`, `valor_pedido=45`, frete `R$12` em dinheiro) → mensagem do motorista saiu: "📦 Valor do produto a cobrar: R$45.00 (dinheiro) / 💰 Total a cobrar do cliente na entrega: R$57.00". Dados de teste removidos depois.
+
 ## 🆕 13/09/2026 — Mini página de cardápio (delivery) + correções financeiras
 
 ### Feature nova: cardápio vira página, não texto corrido
