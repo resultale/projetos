@@ -1,5 +1,18 @@
 # Auditoria TIO — n8n + Supabase — 12/09/2026 (+ 13/09/2026)
 
+## 🆕 13/09/2026 (9) — Vocabulário "entrega" (não "frete") + valor mínimo de entrega padrão iFood
+
+**Vocabulário:** nenhum estabelecimento fala a palavra "frete" — sempre "entrega". Renomeado o vocabulário do prompt/descrições de parâmetro do `Processar_Entrega_Completa` (n8n) de "frete" pra "entrega" (mantendo notas internas explicando que é o mesmo conceito, só pra reforçar ao Agent que a palavra "frete" nunca vai aparecer na mensagem real).
+
+**Nova regra — valor mínimo de entrega (estilo iFood):**
+- `processar_entrega_completa`: valor da entrega nunca fica abaixo de **R$9,00** (piso aplicado tanto no cálculo por distância quanto no valor informado por estabelecimento — não se aplica a tarifas customizadas de estabelecimento com contrato próprio, tabela_km/taxa_fixa/categoria).
+- `aceitar_solicitacao`: pra entregas abaixo de R$9,00 (casos legados/exceção) a comissão do Tio fica limitada a **R$1,00 fixo** em vez do percentual normal — motorista nunca recebe menos que R$8,00 na prática, já que o piso de R$9 garante isso. Acima de R$9, comissão volta ao percentual normal.
+- **Exceção**: quando tem cupom de desconto do Tio aplicado (`cupom_codigo_aplicado`), a comissão volta a ser sempre percentual — o piso de R$1 não vale, já que aí é uma promoção deliberada do Tio, não um preço baixo "de mercado".
+- Rótulo da comissão no texto pro motorista ajustado pra mostrar "Comissão Tio (mínima)" em vez de uma % que não bateria com o valor fixo de R$1.
+- Testado via SQL: valor informado R$5 → vira R$9 automaticamente; solicitação com R$8 (sem cupom, bypassando o piso pra testar isoladamente) → comissão R$1, motorista recebe R$7 (confirma a fórmula valor-1 que na prática nunca passa de R$1 de desconto do piso R$9 → R$8 líquido).
+
+**Pendência em aberto:** ainda not confirmed com o Edvaldo se a regra "tiopay só quando já pago" (item anterior) também deveria ser revertida pro modelo "tiopay é sempre o padrão, só muda se ele informar explicitamente como paga a entrega" — perguntei e ele mudou de assunto pra essa regra do valor mínimo. Precisa voltar nesse ponto antes de considerar fechado.
+
 ## 🆕 13/09/2026 (7) — Correção de regra de negócio: tiopay não é fixo, depende da cobrança do pedido
 
 O Edvaldo corrigiu a lógica implementada no item anterior: **`tiopay` não é o padrão sempre** — é só quando o pedido **já foi pago** (`decisao_cobranca_pedido='ja_pago'`). Quando o motorista **precisa cobrar o pedido** (`decisao_cobranca_pedido='cobrar'`), ele cobra o pedido **e o frete juntos**, na mesma hora, do destinatário — a forma de pagamento do frete nesse caso é a mesma do pedido (`forma_pagamento_pedido`), nunca tiopay.
