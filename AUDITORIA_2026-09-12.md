@@ -234,7 +234,22 @@ Mesmo problema da seção 12, mas do lado do app do motorista (`tio-motorista-fl
 
 Corrigido em `app_oferta_pendente` (assinatura não mudou, sem risco de overload): lê `valor_pedido`, `forma_pagamento_pedido` e `decisao_cobranca_pedido` de `solicitacoes.dados_coletados` (já gravados por `criar_solicitacao_entrega_direta` via `p_extras`) e retorna também `valor_total_cobrar_cliente` (soma de `valor_cliente` + `valor_pedido`, calculado só quando `decisao_cobranca_pedido='cobrar'`).
 
-Testado a lógica isoladamente via SQL (entrega R$9 + pedido R$25 → `valor_total_cobrar_cliente=34.00`, batendo com o resumo do WhatsApp da seção 12). **Não testado ponta a ponta com broadcast real** (exigiria completar o fluxo até "sim"/criar solicitação de verdade, o que dispara oferta pra um motorista de teste). **Pendência:** o app Flutter (repositório separado, fora do escopo deste repo) precisa ser atualizado pra ler e exibir os novos campos (`valor_pedido`, `forma_pagamento_pedido`, `valor_total_cobrar_cliente`) na tela de oferta — o backend já está pronto e retornando esses dados.
+Testado a lógica isoladamente via SQL (entrega R$9 + pedido R$25 → `valor_total_cobrar_cliente=34.00`, batendo com o resumo do WhatsApp da seção 12). **Não testado ponta a ponta com broadcast real** (exigiria completar o fluxo até "sim"/criar solicitação de verdade, o que dispara oferta pra um motorista de teste). ~~**Pendência:** o app Flutter precisa ser atualizado~~ — feito, ver seção 14.
+
+### (14) App Flutter do motorista: tela de oferta e de corrida/entrega ativa mostram o valor do pedido
+
+Continuação direta da seção 13. Localizei e atualizei os dois repositórios do motorista:
+- `resultale/tio-motorista-flutter` — app Flutter **em uso real** (é ele quem chama `app_oferta_pendente`/`app_corridas_ativas`, confirmado via grep no código).
+- `resultale/tio-motorista` — um segundo app (React Native/Expo) que não chama essas RPCs diretamente; contém também uma pasta `dashboard` (Next.js/React, painel administrativo). Verificado: esse dashboard não tem nenhuma tela de acompanhamento de solicitação individual com valor/forma de pagamento (é mais focado em configuração, tarifas, extrato financeiro genérico) — não há nada equivalente à "tela de oferta" pra atualizar lá.
+
+Corrigido no backend (`app_corridas_ativas`, mesmo padrão da seção 13 aplicado em `app_oferta_pendente`): também não expunha `valor_pedido`/`forma_pagamento_pedido`/`valor_total_cobrar_cliente` na lista de corridas/entregas já aceitas pelo motorista.
+
+Corrigido no Flutter (branch `claude/oferta-valor-pedido`, push feito, PR ainda não aberto):
+- `OfertaModel` e `CorridaAtivaModel` ganham os 4 campos novos vindos do backend.
+- Tela de oferta (`oferta_screen.dart`) e tela de corrida/entrega ativa (`corrida_ativa_screen.dart`, nos 2 pontos que mostravam o valor: banner da lista e diálogo de finalização) passam a mostrar o valor TOTAL a cobrar (entrega + pedido) com o detalhamento "Entrega R$X + Pedido R$Y" quando aplicável.
+- Corrigido de brinde um bug relacionado encontrado nesses mesmos trechos: pagamento em `cartao` caía no texto "Já pago", como se fosse `tiopay` (já processado) — agora distingue os 3 estados corretamente (dinheiro/cartão = motorista precisa cobrar; tiopay = já pago).
+
+**Não foi possível rodar `flutter analyze`/build** (Flutter não está instalado neste ambiente) — revisão feita manualmente linha a linha. Recomendo rodar o analyzer antes de mergear a branch.
 
 ### Ainda não mexido (menor prioridade / fora do escopo SQL)
 - 3 extensions no schema `public` (`pg_net`, `http`, `unaccent`) — mover exige recriar e reapontar todas as referências, mais arriscado.
