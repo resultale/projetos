@@ -1,5 +1,9 @@
 # Auditoria TIO — n8n + Supabase — 12/09/2026 (+ 13/09/2026)
 
+## ✅ 13/09/2026 (10) — Pendência do tiopay/cobrar FECHADA
+
+Edvaldo confirmou: a lógica já implementada estava certa. Reformulado por ele: se o cliente já pagou pro estabelecimento, pagou pedido+entrega juntos (`ja_pago` → frete/entrega sempre `tiopay` por padrão, só muda se o estabelecimento avisar que vai pagar o motorista em dinheiro). Se ainda precisa cobrar do cliente (`cobrar`), só pode ser dinheiro ou cartão na entrega — nunca pix (pix já teria sido pago antes pro estabelecimento). **Nenhuma mudança de lógica necessária** — só reforcei no prompt que `forma_pagamento_pedido` nunca deve vir como `pix` quando `decisao_cobranca_pedido='cobrar'` (se vier, é sinal de que devia ser `ja_pago`).
+
 ## 🆕 13/09/2026 (9) — Vocabulário "entrega" (não "frete") + valor mínimo de entrega padrão iFood
 
 **Vocabulário:** nenhum estabelecimento fala a palavra "frete" — sempre "entrega". Renomeado o vocabulário do prompt/descrições de parâmetro do `Processar_Entrega_Completa` (n8n) de "frete" pra "entrega" (mantendo notas internas explicando que é o mesmo conceito, só pra reforçar ao Agent que a palavra "frete" nunca vai aparecer na mensagem real).
