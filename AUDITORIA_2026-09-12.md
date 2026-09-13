@@ -1,4 +1,31 @@
-# Auditoria TIO — n8n + Supabase — 12/09/2026
+# Auditoria TIO — n8n + Supabase — 12/09/2026 (+ 13/09/2026)
+
+## 🆕 13/09/2026 — Mini página de cardápio (delivery) + correções financeiras
+
+### Feature nova: cardápio vira página, não texto corrido
+
+Criado app público `resultale/delivery` (Next.js, deploy no EasyPanel em `delivery.chamaotio.com`) pra substituir o "Agent narra o cardápio em texto" por uma mini página estilo iFood, aberta dentro do próprio WhatsApp:
+
+- **Banco**: tabela `cardapio_sessoes` (token único, expira em 60min, uso único) + RPCs `gerar_link_cardapio`/`gerar_link_busca_cardapio` (internas, só n8n), `cardapio_publico`/`salvar_carrinho_cardapio`/`escolher_item_busca` (públicas, `anon`).
+- **Dois modos de página**:
+  - **`modo: loja`** — cliente já escolheu a loja (ex: "quero pedir do Galegos Burguer") → mostra o cardápio completo daquela loja, monta carrinho, confirma.
+  - **`modo: busca`** — cliente só disse o que quer comer (ex: "quero um x-bacon"), sem citar loja → mostra esse prato em **várias lojas diferentes** com preço de cada uma; toca pra ver descrição, "Pedir esse" já seleciona a loja e adiciona o item ao carrinho automaticamente.
+- **n8n (`WF_DELIVERY`)**: novos nodes `Enviar_Link_Cardapio`, `Enviar_Link_Busca_Cardapio` e `Enviar_Botao_Cardapio` (mensagem interativa do Evolution API, botão "Faça seu pedido aqui" — link nunca aparece cru pro cliente). Prompt do `Agent_tio_delivery` reescrito: comida mencionada sem loja → busca cross-loja; loja nomeada direto → cardápio único.
+- **Ao confirmar o carrinho na página**: `salvar_carrinho_cardapio` dispara via `pg_net` um webhook simulando uma mensagem do cliente pro Maestro (`tio_v2`) — o Agent já continua sozinho a conversa (pergunta endereço/pagamento) sem o cliente precisar digitar nada.
+- **Identidade visual**: logo do Tio + cores da marca (azul `#0F1660` / dourado `#F6B90D`) aplicadas na página.
+
+### Bugs achados e corrigidos durante os testes (todos confirmados end-to-end)
+1. **Mensagens com link não chegavam no WhatsApp** — Evolution API tentava gerar preview do link e travava o envio (confirmado testando até com `google.com`). Corrigido com `linkPreview: false` no `sendText`. Isso valia pra **qualquer** link, não só o nosso — corrigido no node genérico `Enviar_WhatsApp` do `WF_DELIVERY`.
+2. **Token do cardápio "expirado" mesmo válido** — ao encurtar o token de 65 pra 12 caracteres, sobrou uma validação antiga (`length(p_token) < 20`) em `_resolver_sessao_cardapio` que rejeitava todo token novo. Corrigido pra `< 10`.
+3. **Falta de grant explícito pro PUBLIC** — `gerar_link_busca_cardapio` ficou acidentalmente executável por `anon` porque só tinha sido revogado de `anon`/`authenticated`, não do `PUBLIC` (Postgres dá `GRANT EXECUTE TO PUBLIC` por padrão em toda função nova — **isso é sistêmico, vale lembrar em qualquer função nova criada daqui pra frente**). Corrigido com `REVOKE ALL ... FROM PUBLIC`.
+4. **`Criar_Pedido_Delivery` retornando erro "function does not exist"** (bug pré-existente, não relacionado ao cardápio) — o node passava `distancia_km`/`tempo_minutos` como `float8`, mas a função espera `numeric`. Corrigido o cast na query do node.
+
+### Correções financeiras/copy pedidas pelo Edvaldo
+- **Mensagem de corrida pro cliente** (`aceitar_solicitacao`) simplificada: antes mostrava "Valor da corrida: R$X / Você paga: R$Y (arredondado)" (parecia expor a base de cálculo do motorista). Agora mostra só o valor final e, se houver diferença de arredondamento, "Você ganhou R$Z de crédito automático na sua carteira TioPay!". Mensagem do motorista (com comissão) não mudou.
+- **Delivery "produto+entrega" ou "só entrega" não é mais perguntado ao cliente** — virou config fixa por loja (`lojas.cobra_produto_e_entrega`, boolean, default `true` = cobra tudo junto). `montar_resumo_delivery` e `criar_pedido_delivery` agora leem isso da loja e ignoram esse parâmetro se vier do Agent. Prompt do `Agent_tio_delivery` não pergunta mais isso.
+
+---
+
 
 ## ✅ WF_CORRIDA — testes de usabilidade + guardrail de endereço impreciso
 
