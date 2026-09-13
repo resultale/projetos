@@ -1,5 +1,17 @@
 # Auditoria TIO — n8n + Supabase — 12/09/2026 (+ 13/09/2026)
 
+## 🆕 13/09/2026 (3) — Bug real de roteamento achado por teste FIEL (via n8n, não via RPC direta)
+
+**Contexto importante:** todos os testes anteriores desse dia validaram as RPCs chamando-as diretamente por SQL — prova que o banco está certo, mas não prova que o classificador (LLM) do Maestro vai extrair/rotear certo a partir de uma mensagem real em linguagem natural. A pedido do Edvaldo, testamos de verdade: disparamos uma mensagem sintética pro webhook real (`n8n.chamaotio.com/webhook/tio_v2`, via `pg_net`, simulando um payload do Evolution API) com um número de teste marcado como `estabelecimento`, e inspecionamos a execução real do n8n.
+
+**Bug encontrado:** mensagem "Preciso de uma entrega pra [endereço], é uma pizza grande, ..." foi classificada pelo LLM classificador (`Basic LLM Chain`, `tio_v3`) como `[tipo:DELIVERY]` em vez de `ENTREGA` — a palavra "pizza" bastou pra desviar o roteamento, mesmo a frase começando com "preciso de uma entrega" e o próprio prompt já tendo uma regra escrita dizendo que isso deveria virar ENTREGA. Resultado: a mensagem nunca chegava no `Agent_tio`/`Processar_Entrega_Completa` — ia pro fluxo de cardápio por engano.
+
+**Correção:** adicionado guardrail determinístico (regex, sem LLM) em `tio_v3` — nodes `Detectar_Entrega_Estabelecimento_Deterministico` + `Eh_Entrega_Estabelecimento_Deterministico` + `Forcar_Tipo_Entrega_Estabelecimento_Deterministico` — que força `tipo:ENTREGA` sempre que a conta é `estabelecimento` E a mensagem menciona "entrega/entregar" explicitamente, sem depender do classificador acertar. Segue o mesmo padrão já usado pra corrida (`Detectar_Pedido_Transporte_Deterministico`).
+
+**Reteste (mesma mensagem, mesmo cenário) confirmou o Agent real, não a RPC simulada, funcionando ponta a ponta:** roteou certo pro WF_ENTREGA, o `Agent_tio` extraiu sozinho TODOS os campos numa única chamada (origem via endereço salvo, destino, veículo, frete, `decisao_cobranca_pedido='cobrar'`, `valor_pedido=60`, `forma_pagamento_pedido='pix'`), RPC retornou `pronto_para_resumo:true`, e o resumo final saiu com a linha "📦 O motorista vai cobrar R$ 60,00 (pix) do cliente na entrega" certinha.
+
+**Lição para próximos testes:** testar a RPC direto por SQL só valida o banco. Testar de verdade (disparar webhook real + inspecionar execução do n8n) é o que revela erros de classificação/roteamento do LLM, que é onde o comportamento do sistema é menos previsível.
+
 ## 🆕 13/09/2026 (2) — Entrega de ESTABELECIMENTO (WF_ENTREGA): defaults + cobrança na entrega
 
 Motor **separado** do cardápio/delivery: é o `WF_ENTREGA`, usado tanto por cliente comum (entrega pessoa-a-pessoa, sem nada a cobrar do destinatário) quanto por conta **estabelecimento** (loja pedindo pra Tio entregar um pedido já vendido por ela a um cliente dela). Toda a lógica nova abaixo é **exclusiva de estabelecimento** (`v_eh_estabelecimento`/`eh_estabelecimento`) — entregas de cliente comum continuam exatamente como eram (origem+destino+veículo+forma de pagamento+tarifa por distância, sem nenhuma pergunta nova).
