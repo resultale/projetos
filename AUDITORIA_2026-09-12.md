@@ -188,6 +188,33 @@ As outras funções que cortei e que só apareciam no repo errado (`app_aprovar_
 - Índices criados (via `CONCURRENTLY`, sem travar produção) nas 3 FKs sem cobertura em `solicitacoes` (`loja_id`, `servico_id`, `solicitacao_entrega_id`).
 - 26 índices mortos removidos (nunca usados, fora de `solicitacoes`), incluindo em `usuarios`, `veiculos`, `transacoes_financeiras`, `mensagens`, `operadores`, etc. Índices de chave primária/UNIQUE preservados.
 
+### (11) Bug do valor errado no resumo de entrega + CashDin pra destinatário sem cadastro Tio + arredondamento indevido em entrega de estabelecimento
+
+Achado via teste FIEL (webhook real → `Agent_tio` → n8n → inspeção da execução), não por suposição.
+
+**Bug 1 — resumo mostrava o valor digitado pelo remetente, não o valor real do banco.** Estabelecimento digitou "o valor da entrega é 8 reais", mas a RPC já aplica o piso de R$9 (ver seção 9) e retorna `valor_original=9`. O `Agent_tio` ignorava isso e escrevia "💰 Valor: R$ 8,00" no resumo — reproduzido 2x seguidas mesmo depois de reforçar o prompt ("NUNCA use o valor que o remetente digitou..."). Causa raiz: existe uma função determinística (`gerenciar_confirmacao_pagamento`) que já existia pra corrigir exatamente esse tipo de problema em corridas, chamada por um node Postgres (`Gerenciar_Confirmacao_Pagamento`) logo depois do Agent — mas ela só entrava em ação quando o texto do Agent continha literalmente a frase "fechando os detalhes"; como o Agent varia a abertura da mensagem ("Beleza, já tá tudo pronto!", "Aqui tá o resumo..." etc.), a correção quase nunca disparava. Também havia um mismatch de emoji (💰 vs 💵) que quebrava a inserção da linha de CashDin quando ela chegava a rodar.
+
+Corrigido em `gerenciar_confirmacao_pagamento`:
+- Detecção de "isso é um resumo" trocada de uma frase fixa pra uma combinação de marcadores estruturais (endereço + "valor" + "posso confirmar/gerar"), bem mais robusta a variação de texto do LLM.
+- Em vez de tentar remendar a frase livre do Agent com regex, a função agora **remove qualquer linha de valor** que o Agent tenha escrito (identificadas pelos emojis 💰/💵/🎁/🎉) e **reconstrói o bloco inteiro deterministicamente** com os valores reais (`valor_original`, `valor_arredondado`, `valor_troco_digital`) vindos do banco, inserindo antes da pergunta de confirmação.
+- Corrigido também o `processar_entrega_completa`: ele nunca salvava `valor_original` em `conversation_state.contexto` (só salvava o valor final já arredondado) — por isso o node que lê o contexto pra alimentar essa função sempre recebia `valor_original_salvo = NULL`. Agora salva os dois.
+
+Validado com teste real (execução 95089): mensagem "o valor da entrega é 8 reais" → resumo final mostrou corretamente "💰 Valor: R$ 9,00".
+
+**Bug 2 — vocabulário "Embarque" no resumo de entrega.** Corrigido pra "Retirada" (Embarque é termo de corrida/passageiro).
+
+**Feature nova — CashDin/arredondamento assume que o pagador tem conta TioPay, o que nem sempre é verdade.** Edvaldo apontou que o `telefone_destinatario` de uma entrega pode ser qualquer pessoa, não necessariamente cliente Tio — não faz sentido prometer crédito CashDin numa carteira que não existe. E foi além: numa entrega de **estabelecimento**, o arredondamento (mesmo só pra facilitar troco físico, sem CashDin) também não faz sentido, porque o valor cobrado ali já é pedido+entrega somados e quem paga pode nem ser cliente — só se aplica em corrida, delivery e entrega cliente-pra-cliente.
+
+Implementado em `processar_entrega_completa`:
+- Nova checagem: `SELECT EXISTS(SELECT 1 FROM usuarios WHERE telefone = v_telefone_destinatario)` → campo novo `destinatario_eh_cliente_tio` no retorno e no contexto salvo.
+- **Entrega de estabelecimento** (`v_eh_estabelecimento = true`): arredondamento pulado por completo — `valor_arredondado := valor` e `valor_troco_digital := 0` sempre, independente do destinatário ter cadastro ou não.
+- **Entrega cliente-pra-cliente** (não estabelecimento): arredondamento continua normal, mas `valor_troco_digital` é zerado se `destinatario_eh_cliente_tio = false` (mantém o arredondamento do valor pra facilitar troco em espécie, só não promete o crédito digital).
+- Prompt do `Agent_tio` (WF_ENTREGA) atualizado: nunca mencionar CashDin se `valor_troco_digital` vier zerado; e se `destinatario_eh_cliente_tio = false`, mandar uma mensagem curta de apresentação do Tio pro recebedor via `notificar_extra` (mecanismo que já existia, reaproveitado — não precisou criar nó/webhook novo) no mesmo momento de `Criar_Solicitacao_Entrega`.
+
+Testado via SQL direto e via webhook real: destinatário sem cadastro (`5514900000009`) → `destinatario_eh_cliente_tio=false`, `valor_troco_digital=0`; destinatário cadastrado (Edi, `5514996473659`) → `destinatario_eh_cliente_tio=true`; entrega de estabelecimento com valor R$8 → piso R$9 aplicado, sem arredondamento pra R$10 e sem CashDin (correto, é estabelecimento).
+
+**Nota lateral (não corrigida, fora do escopo pedido):** `processar_entrega_completa` e outras RPCs do projeto têm `EXECUTE` concedido a `anon`/`authenticated` além de `postgres` — parece ser o comportamento padrão do Supabase ao criar funções no schema `public`, não algo introduzido nesta sessão. Vale uma auditoria de grants à parte se o Edvaldo quiser revisar.
+
 ### Ainda não mexido (menor prioridade / fora do escopo SQL)
 - 3 extensions no schema `public` (`pg_net`, `http`, `unaccent`) — mover exige recriar e reapontar todas as referências, mais arriscado.
 - "Leaked password protection" desligado no Auth — é toggle no painel do Supabase, não dá pra mudar por SQL.
