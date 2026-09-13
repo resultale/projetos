@@ -1,5 +1,11 @@
 # Auditoria TIO — n8n + Supabase — 12/09/2026 (+ 13/09/2026)
 
+## 🆕 13/09/2026 (4) — 2ª rodada do guardrail de roteamento + correção do pagamento do frete
+
+**Guardrail incompleto:** o guardrail do item (3) abaixo só pegava a palavra "entrega/entregar" explícita. Testando a frase real do Edvaldo ("Manda uma moto pra [endereço], é uma pizza grande, telefone do cliente é X, o frete é 15 reais no pix...") — que não usa a palavra "entrega" nenhuma vez — o guardrail não disparou e caiu de novo no LLM, que classificou como DELIVERY por causa da "pizza". Ampliado pra também disparar com "frete" e "telefone do cliente/destinatário" (vocabulário exclusivo de entrega de estabelecimento). Retestado com a frase exata — roteou certo pro WF_ENTREGA.
+
+**Correção de regra de negócio — pagamento do frete:** o prompt tratava pix/cartão do frete como se fossem "pro motorista igual dinheiro". Corrigido pra regra certa: **só dinheiro vai fisicamente pro motorista na hora**; pix/cartão/tiopay do frete são sempre acerto direto entre o estabelecimento e o Tio — o motorista nunca recebe nada em mãos por causa disso, só é creditado depois na carteira TioPay (igual comissão normal). O motorista só recebe algo fisicamente em duas situações: (a) frete pago em dinheiro, ou (b) `decisao_cobranca_pedido='cobrar'` (ele coleta o pedido inteiro do destinatário). Testado ponta a ponta com "frete no pix + já pago" — resumo saiu limpo, sem menção a motorista recebendo pix, e a mensagem do motorista (já validada antes) mostra corretamente só "já cai na carteira TioPay".
+
 ## 🆕 13/09/2026 (3) — Bug real de roteamento achado por teste FIEL (via n8n, não via RPC direta)
 
 **Contexto importante:** todos os testes anteriores desse dia validaram as RPCs chamando-as diretamente por SQL — prova que o banco está certo, mas não prova que o classificador (LLM) do Maestro vai extrair/rotear certo a partir de uma mensagem real em linguagem natural. A pedido do Edvaldo, testamos de verdade: disparamos uma mensagem sintética pro webhook real (`n8n.chamaotio.com/webhook/tio_v2`, via `pg_net`, simulando um payload do Evolution API) com um número de teste marcado como `estabelecimento`, e inspecionamos a execução real do n8n.
