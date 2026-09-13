@@ -1,5 +1,21 @@
 # Auditoria TIO — n8n + Supabase — 12/09/2026 (+ 13/09/2026)
 
+## 🆕 13/09/2026 (5) — Testes com contas reais em Lençóis Paulista (Marcelo, Silvia, Diih) + bugs adicionais
+
+**⚠️ Achado de processo:** o primeiro teste usou um número real e ativo (Marcelo, dono da barbearia "Confraria do Corte") — ele recebeu de verdade a mensagem de teste no WhatsApp e respondeu confuso. Número já estava cadastrado no banco mas em uso real, não era "de teste" só por estar lá. Estado de conversa dele restaurado exatamente como estava. Lição: mesmo pré-lançamento, checar se a conta tem uso ativo recente antes de disparar teste nela.
+
+**Bug 1 - "FALTANDO" vazando pro parâmetro da ferramenta:** o bloco de contexto "Dados salvos" do prompt (`Agent_tio`, WF_ENTREGA) mostra `campo: FALTANDO` quando um dado ainda não foi coletado — só pra leitura do próprio Agent. Só que o modelo estava *copiando* literalmente essa palavra como valor real do parâmetro (`forma_pagamento: "FALTANDO"`) na chamada da ferramenta, corrompendo o dado (a RPC não trata como nulo). Um aviso textual sozinho não resolveu — o modelo continuou copiando. Resolvido substituindo o placeholder por texto que não pareceria um valor válido de parâmetro (`"(dado ainda nao informado)"`). Confirmado corrigido em reteste real.
+
+**Bug 2 - parâmetros do n8n sem defaultValue viram "obrigatórios" pro LLM:** aproveitando a investigação do bug 1, os `$fromAI(...)` do node `Processar_Entrega_Completa` foram todos atualizados com descrição + `defaultValue` vazio, deixando-os genuinamente opcionais no schema que o n8n gera pro modelo (antes disso o modelo se sentia "obrigado" a preencher algo em todo parâmetro declarado).
+
+**Bug 3 - Agent assumindo "dinheiro" no pagamento do frete sem o remetente ter dito isso** — corrigido em duas camadas: (a) prompt agora deixa claro que o padrão do frete de estabelecimento é sempre `tiopay` (acerto direto com o Tio) e o Agent nunca deve perguntar isso; (b) a RPC `processar_entrega_completa` passou a aplicar esse default sozinha (antes só clientes com `entrega_conta_pos_paga=true` tinham auto-tiopay; agora vale pra todo estabelecimento). Durante essa correção introduzi um bug novo (esqueci de incluir 'dinheiro' na lista de valores válidos do CASE, fazendo ele cair sempre em 'tiopay') — pego e corrigido no mesmo teste, confirmado via SQL direto.
+
+**Achado sem correção aplicada (fica registrado para acompanhar):** em um teste real com o Diih, a ferramenta retornou `forma_pagamento:"dinheiro"` mesmo a chamada do Agent (visível no log de execução) não incluindo esse parâmetro. Testes isolados da RPC confirmam que ela funciona certo (default `tiopay` quando nulo) — o comportamento pontual parece uma inconsistência do próprio modelo LLM entre chamadas semelhantes, não um bug determinístico do sistema. Vale reobservar em testes futuros.
+
+**Endereço da Silvia cadastrado:** `enderecos` — Rua Francisco Marins, 156, Lençóis Paulista (ela não tinha endereço salvo, o que estava gerando `campos_faltantes: origem` em todo teste).
+
+Todos os `conversation_state` das contas reais usadas (Marcelo, Silvia, Diih) foram restaurados ao estado anterior aos testes.
+
 ## 🆕 13/09/2026 (4) — 2ª rodada do guardrail de roteamento + correção do pagamento do frete
 
 **Guardrail incompleto:** o guardrail do item (3) abaixo só pegava a palavra "entrega/entregar" explícita. Testando a frase real do Edvaldo ("Manda uma moto pra [endereço], é uma pizza grande, telefone do cliente é X, o frete é 15 reais no pix...") — que não usa a palavra "entrega" nenhuma vez — o guardrail não disparou e caiu de novo no LLM, que classificou como DELIVERY por causa da "pizza". Ampliado pra também disparar com "frete" e "telefone do cliente/destinatário" (vocabulário exclusivo de entrega de estabelecimento). Retestado com a frase exata — roteou certo pro WF_ENTREGA.
