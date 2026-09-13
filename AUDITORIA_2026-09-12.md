@@ -1,5 +1,17 @@
 # Auditoria TIO — n8n + Supabase — 12/09/2026 (+ 13/09/2026)
 
+## 🆕 13/09/2026 (6) — Cenário "cobrar" completo, ponta a ponta (Galegos → Edvaldo)
+
+**Bug corrigido antes do teste:** ao tornar `tiopay` o padrão do frete pra estabelecimento (item anterior), a seção "CONFIRMAÇÃO DO CLIENTE" do prompt só sabia tratar `pix` vs `dinheiro/cartão` — não tinha instrução pra `tiopay`, o que travaria a criação da solicitação. Corrigido: `tiopay` agora entra no mesmo grupo de dinheiro/cartão (cria a solicitação direto, sem gerar Pix).
+
+**Achado sem correção (mais um caso de inconsistência do LLM):** na mensagem de teste, "dinheiro" foi mencionado só em relação ao valor do PEDIDO ("motorista vai precisar cobrar 45 reais em dinheiro do cliente") — mas o Agent também aplicou "dinheiro" no campo de pagamento do FRETE, que não tinha sido mencionado. Parece um "vazamento" do valor de um parâmetro pro outro parâmetro parecido. RPC teria dado `tiopay` corretamente se o parâmetro tivesse vindo vazio; segue como ponto de atenção pra observar em testes futuros.
+
+**Teste completo (contas reais autorizadas: Galegos como estabelecimento, Edvaldo Leite como motorista, Edi Leite como destinatário/cliente final):** mensagem única "Tio, preciso de uma entrega... telefone do cliente é [Edi]... valor da entrega é 8 reais... motorista vai precisar cobrar 45 reais em dinheiro do cliente" → resumo correto com `📦 O motorista vai cobrar R$ 45,00 (dinheiro) do cliente na entrega`. Simulando o aceite do Edvaldo, a mensagem dele saiu:
+
+> Valor da entrega: R$8,00 / Comissão Tio (20%): R$1,60 / Você recebe: R$6,40 (carteira TioPay) / 📦 Valor do produto a cobrar: R$45,00 (dinheiro) / 💰 Total a cobrar do cliente na entrega: R$45,00
+
+Total ficou correto (só o produto — não somou o frete, porque o frete não é pago em dinheiro). Mensagem do cliente (Galegos) sem vazar comissão. Dados de teste removidos, estados de conversa dos três restaurados ao que eram antes.
+
 ## 🆕 13/09/2026 (5) — Testes com contas reais em Lençóis Paulista (Marcelo, Silvia, Diih) + bugs adicionais
 
 **⚠️ Achado de processo:** o primeiro teste usou um número real e ativo (Marcelo, dono da barbearia "Confraria do Corte") — ele recebeu de verdade a mensagem de teste no WhatsApp e respondeu confuso. Número já estava cadastrado no banco mas em uso real, não era "de teste" só por estar lá. Estado de conversa dele restaurado exatamente como estava. Lição: mesmo pré-lançamento, checar se a conta tem uso ativo recente antes de disparar teste nela.
