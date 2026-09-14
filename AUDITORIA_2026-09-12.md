@@ -350,6 +350,18 @@ Causa: `criar_pedido_delivery` (dispara a notificação de novo pedido pra loja,
 
 Corrigido: a função agora também busca `usuarios.nome` do cliente e inclui uma linha "👤 Cliente: [nome]" logo após o código do pedido (usa "não informado" como fallback se o nome estiver vazio no cadastro). Testado o formato da linha isoladamente (fora do fluxo de criação real, pra não gerar pedido de teste/notificação real pra nenhuma loja).
 
+### (21) App: erro ao trocar tipo de corrida ativo (moto/carro) quando o motorista tem 2+ veículos do mesmo tipo
+
+Edvaldo mandou print do app: tela "Meus Veículos" da Diih Leite, tentando trocar de moto pra carro, deu "Erro ao alterar tipo de serviço. Tente novamente." — mensagem genérica, sem detalhe.
+
+Rastreei a origem exata (`veiculo_remote_datasource.dart` → RPC `app_definir_tipos_servico`) e reproduzi o erro de verdade dentro de uma transação de teste antes de mexer em qualquer coisa (regra do projeto: nunca editar no escuro). Causa raiz: existe um índice único no banco (`idx_veiculo_unico_ativo`) garantindo só 1 veículo `ativo=true` por motorista — correto e intencional. Mas a função `app_definir_tipos_servico` ativava o veículo do tipo escolhido sem `LIMIT 1`: `UPDATE veiculos SET ativo=true WHERE usuario_id=... AND tipo='carro' AND status='aprovado'`. A Diih tem **2 carros aprovados** (Chevrolet Onix e Fiat Fiorino) — a query tentava marcar os dois como ativos na mesma transação, violando o índice único e derrubando a troca com erro genérico no app.
+
+Reproduzido exatamente (mesmo erro `23505 duplicate key value violates unique constraint "idx_veiculo_unico_ativo"`) rodando a lógica da função passo a passo pros dados reais da Diih, dentro de uma transação com rollback.
+
+Corrigido: a função agora escolhe deterministicamente 1 veículo (o mais recente cadastrado daquele tipo/aprovado — mesmo critério já usado em `aceitar_solicitacao` pra escolher veículo do motorista) antes de ativar, em vez de tentar ativar todos que baterem no filtro.
+
+Validado com o mesmo teste (mesma transação/rollback): a troca agora completa sem erro — moto desativada, Chevrolet Onix (carro mais recente) ativado, Fiat Fiorino continua inativo. Nenhum dado real foi alterado durante o teste (tudo revertido).
+
 ### Ainda não mexido (menor prioridade / fora do escopo SQL)
 - 3 extensions no schema `public` (`pg_net`, `http`, `unaccent`) — mover exige recriar e reapontar todas as referências, mais arriscado.
 - "Leaked password protection" desligado no Auth — é toggle no painel do Supabase, não dá pra mudar por SQL.
