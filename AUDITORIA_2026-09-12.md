@@ -342,6 +342,14 @@ Corrigido:
 
 Testado com segurança (`BEGIN`/`ROLLBACK`): mudei `cidade_id` da Diih pra outra cidade de teste dentro da transação, confirmei que o trigger atualizou o texto automaticamente, depois desfiz. Confirmado fora da transação que o dado real dela agora está correto (`cidade='Lençóis Paulista'`).
 
+### (20) Mensagem "Novo pedido" pra loja não informava o nome do cliente
+
+Edvaldo mandou print de um pedido real de pizza (#1705) recebido no WhatsApp da loja — a mensagem trazia item, valores, forma de pagamento, mas nenhuma menção a quem era o cliente.
+
+Causa: `criar_pedido_delivery` (dispara a notificação de novo pedido pra loja, direto via `net.http_post` pra Evolution API) nunca buscava nem incluía o nome do cliente no template da mensagem — só usava `p_telefone_cliente` internamente pra achar o `usuario_id`, sem selecionar o nome.
+
+Corrigido: a função agora também busca `usuarios.nome` do cliente e inclui uma linha "👤 Cliente: [nome]" logo após o código do pedido (usa "não informado" como fallback se o nome estiver vazio no cadastro). Testado o formato da linha isoladamente (fora do fluxo de criação real, pra não gerar pedido de teste/notificação real pra nenhuma loja).
+
 ### Ainda não mexido (menor prioridade / fora do escopo SQL)
 - 3 extensions no schema `public` (`pg_net`, `http`, `unaccent`) — mover exige recriar e reapontar todas as referências, mais arriscado.
 - "Leaked password protection" desligado no Auth — é toggle no painel do Supabase, não dá pra mudar por SQL.
