@@ -275,6 +275,23 @@ Corrigido: adicionado ramo `ELSIF v_motor = 'corrida' THEN` em `aceitar_solicita
 
 Validado com teste seguro (`BEGIN`/`ROLLBACK`): corrida de R$21,73 → mensagem de aceite agora mostra "Comissão Tio (fixa): R$1,00 / Você recebe: R$20,73" — bate exatamente com o que a oferta já mostrava.
 
+### (17) Auditoria completa: todos os pontos que calculam desconto do motorista
+
+Edvaldo pediu pra conferir TODOS os pontos do sistema que calculam quanto descontar do motorista, garantindo que todos usem `usuarios.forma_cobranca_motorista` (editável no dashboard) como fonte única de verdade — não só corrigir o bug pontual da seção 16.
+
+Levantei todas as funções que fazem esse cálculo (`grep` por `forma_cobranca_motorista`/`percentual_comissao`/`comissao_corrida_fixa` em `pg_proc`):
+
+- **`calcular_valor_liquido_profissional`** — o helper centralizado (já existia), correto: respeita `forma_cobranca_motorista` (comissionada/fixa/fixa_por_corrida) e a comissão fixa de corrida. É a fonte de verdade "oficial" pra exibição de valor estimado.
+- **`app_oferta_pendente`** (tela de oferta do app) — estava correta desde a seção 13, mas **duplicava** a lógica do helper manualmente em vez de chamá-lo. Refatorado pra chamar `calcular_valor_liquido_profissional` diretamente — menos código duplicado, menos risco de divergir de novo no futuro.
+- **`app_corridas_ativas`** (tela de corrida/entrega ativa do app) — **bug confirmado**: calculava o valor do motorista sempre por percentual da cidade/franquia, **sem nunca checar `forma_cobranca_motorista`**. Motoristas em modo `fixa` (diária, deveriam ficar com 100%) ou `fixa_por_corrida` (taxa fixa configurada) viam um valor errado nessa tela. Corrigido pra usar o mesmo helper.
+- **`aceitar_solicitacao`** (mensagem de confirmação real no WhatsApp) — corrigida na seção 16 (comissão de corrida virou fixa R$1, batendo com a oferta). Mantida com lógica própria (não usa o helper) porque precisa dos componentes separados (comissão franquia vs. matriz) pra fazer o split correto — mas agora aplica a mesma regra.
+- **`fechar_comissao_entrega`** (fechamento financeiro real ao concluir) — já estava correta (tratada nas seções 15/16 anteriores desta sessão), com toda a lógica de `forma_cobranca_motorista` + cupons + splits já certa. Também não usa o helper simples pelo mesmo motivo (precisa dos componentes pros lançamentos financeiros).
+- **`processar_taxa_fixa_no_aceite`** — correta, só age no modo `fixa`, checando explicitamente `forma_cobranca_motorista != 'fixa'` antes de qualquer coisa.
+- **`fechar_comissao_delivery`** — não é sobre motorista (é a comissão franquia/matriz sobre o produto e entrega do delivery, cobrada da loja/repasse), fora do escopo dessa checagem.
+- **`fn_processar_conclusao_delivery`** (trigger) — tinha o mesmo bug (percentual fixo, ignora `forma_cobranca_motorista`), mas o trigger está **desativado** (`tgenabled='D'`) — código morto, não roda em produção. Não mexi (não estava pedido reativar), só registro aqui pra não ser reativado sem corrigir primeiro se algum dia for reaproveitado.
+
+**Validado:** `calcular_valor_liquido_profissional` testado nos 3 modos (comissionada→R$20,73, fixa→R$21,73/100%, fixa_por_corrida→R$20,73, todos pra uma corrida de R$21,73) via `BEGIN`/`ROLLBACK` sem tocar em dado real, batendo exatamente com o que `aceitar_solicitacao` retorna pro modo comissionada.
+
 ### Ainda não mexido (menor prioridade / fora do escopo SQL)
 - 3 extensions no schema `public` (`pg_net`, `http`, `unaccent`) — mover exige recriar e reapontar todas as referências, mais arriscado.
 - "Leaked password protection" desligado no Auth — é toggle no painel do Supabase, não dá pra mudar por SQL.
