@@ -362,6 +362,19 @@ Corrigido: a função agora escolhe deterministicamente 1 veículo (o mais recen
 
 Validado com o mesmo teste (mesma transação/rollback): a troca agora completa sem erro — moto desativada, Chevrolet Onix (carro mais recente) ativado, Fiat Fiorino continua inativo. Nenhum dado real foi alterado durante o teste (tudo revertido).
 
+### (22) App: motorista com 2+ veículos do mesmo tipo agora pode escolher qual usar
+
+Continuação direta da seção 21. Edvaldo perguntou: se a Diih tiver 2 carros (Onix e Fiorino), como ela escolhe qual dos dois usar — já que a correção anterior sempre ativa o mais recente cadastrado automaticamente?
+
+Investigando, achei que **já existia no banco** uma RPC pronta pra isso (`app_trocar_veiculo_ativo`, recebe `p_veiculo_id` específico, escrita corretamente sem o bug de duplicidade da seção 21) — mas nunca tinha sido ligada a nenhuma tela do app Flutter (só aparecia numa lista de nomes de RPC em `supabase_service.dart`, sem nenhum chamador real).
+
+Implementado ponta a ponta:
+- Backend: `app_listar_veiculos` agora também retorna o campo `ativo` de cada veículo individualmente (antes o app calculava "ativo" só pelo TIPO — moto/carro —, sem saber QUAL veículo específico daquele tipo estava em uso).
+- App Flutter (commitado na mesma branch `claude/oferta-valor-pedido` do repo `tio-motorista-flutter`, junto com as mudanças anteriores de valor do pedido — commit `c74f456`; ainda precisa de build/publicação do app pra chegar no celular do motorista): `VeiculoModel` ganha o campo `ativo`; novo método `trocarVeiculoAtivo` no datasource/repository/provider; a tela "Meus Veículos" agora mostra corretamente qual veículo específico está ativo (não mais "qualquer um do tipo certo") e os cards dos outros veículos do MESMO tipo já ativo (ex: outro carro, quando carro já é o tipo ativo) ficam tocáveis — toca no card da Fiorino, ela vira a ativa, com um aviso visual "Toque para usar este agora" nos elegíveis.
+- Restrição proposital: só é possível trocar pra outro veículo do MESMO tipo que já está ativo (ex: entre os 2 carros). Pra trocar de tipo (moto→carro), continua usando os botões "Moto"/"Carro" do topo — evita destravar o veículo ativo do tipo de serviço ativo (`usuarios.motor_tipos_servico`, usado pra rotear ofertas), que são coisas relacionadas mas armazenadas separadamente.
+
+**Dado real de produção observado durante a investigação** (não alterado por mim, só consultado): a Fiorino da Diih já estava com `ativo=true` no banco — ela deve ter conseguido trocar de moto pra carro com sucesso depois da correção da seção 21 (confirma que aquela correção já está funcionando em produção).
+
 ### Ainda não mexido (menor prioridade / fora do escopo SQL)
 - 3 extensions no schema `public` (`pg_net`, `http`, `unaccent`) — mover exige recriar e reapontar todas as referências, mais arriscado.
 - "Leaked password protection" desligado no Auth — é toggle no painel do Supabase, não dá pra mudar por SQL.
