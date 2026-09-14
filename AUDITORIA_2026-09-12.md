@@ -292,6 +292,40 @@ Levantei todas as funções que fazem esse cálculo (`grep` por `forma_cobranca_
 
 **Validado:** `calcular_valor_liquido_profissional` testado nos 3 modos (comissionada→R$20,73, fixa→R$21,73/100%, fixa_por_corrida→R$20,73, todos pra uma corrida de R$21,73) via `BEGIN`/`ROLLBACK` sem tocar em dado real, batendo exatamente com o que `aceitar_solicitacao` retorna pro modo comissionada.
 
+### (18) Comissão separada por motor: forma de cobrança em corrida ≠ forma de cobrança em entrega
+
+Edvaldo pediu uma mudança de negócio maior: hoje `usuarios.forma_cobranca_motorista` é UM campo só (comissionada/fixa/fixa_por_corrida), aplicado igual em corrida e entrega. Ele quer que o motorista possa ter, por exemplo, "fixa" (diária) em corrida e "comissionada" em entrega ao mesmo tempo — cada um editável separadamente no dashboard.
+
+Antes de implementar, confirmei com ele um ponto de design crítico: a taxa fixa DIÁRIA hoje é uma cobrança única por dia que já soma o valor de corrida + entrega. Ele confirmou que precisa virar **2 cobranças diárias independentes** (uma por motor), não uma combinada condicionada a ambos estarem no modo fixo.
+
+**Schema (migração feita, sem quebrar nada em produção — campos antigos mantidos por enquanto):**
+- `usuarios`: novos campos `forma_cobranca_motorista_corrida`, `forma_cobranca_motorista_entrega` (mesmo domínio: comissionada/fixa/fixa_por_corrida) + `forma_cobranca_motorista_corrida_data_adesao`/`_entrega_data_adesao` (pra regra do prazo mínimo de 1 semana funcionar por motor). Dados existentes migrados: os dois campos novos começaram com o mesmo valor que `forma_cobranca_motorista` já tinha, preservando o comportamento atual até alguém trocar via dashboard.
+- `historico_forma_cobranca_motorista`: nova coluna `motor` (registros antigos marcados como `'corrida'`, já que não tinha essa distinção antes).
+- `cobrancas_fixas_diarias`: nova coluna `motor`, chave única trocada de `(motorista_id, data_referencia)` pra `(motorista_id, data_referencia, motor)` — permite 2 cobranças no mesmo dia (uma de cada motor). Tabela estava vazia (0 linhas), sem dados legados pra migrar.
+
+**Funções atualizadas pra ler/gravar o campo certo conforme o motor:**
+- `calcular_valor_liquido_profissional` — helper central, agora lê o campo certo (corrida/entrega) antes de decidir a regra.
+- `app_oferta_pendente` e `app_corridas_ativas` (app do motorista) — já chamavam o helper acima (seção 17), herdam a correção automaticamente sem precisar mexer de novo.
+- `aceitar_solicitacao` (mensagem real de confirmação no WhatsApp) — lê o campo certo.
+- `fechar_comissao_entrega` (fechamento financeiro real ao concluir) — lê o campo certo, e passa o motor pra `motorista_tem_cobranca_fixa_ativa_hoje`.
+- `motorista_tem_cobranca_fixa_ativa_hoje` — ganhou parâmetro `p_motor`, filtra a cobrança diária daquele motor especificamente.
+- `processar_taxa_fixa_no_aceite` — reescrita pra trabalhar por motor: soma só os veículos daquele motor (usa o mesmo critério de sufixo `_entrega` já usado no resto do sistema) e busca/cria a cobrança diária filtrando por `motor` também.
+- `trocar_forma_cobranca_motorista` (fluxo motorista troca de plano) — ganhou parâmetro obrigatório `p_motor`, lê/grava a data de adesão certa, valida o prazo mínimo de 1 semana por motor, registra no histórico com o motor.
+- `dashboard_definir_forma_cobranca` (dashboard grava a troca) — ganhou parâmetro `p_motor`.
+
+Todos os overloads antigos (assinatura sem `p_motor`) foram removidos depois de migrar os chamadores — checado com `SELECT proname, count(*) ... GROUP BY proname`, sem órfãos.
+
+**Dashboard React (`resultale/tio-motorista`, pasta `dashboard`) atualizado**: a tela "Motoristas" tinha uma coluna só "Forma de cobrança"; virou duas colunas independentes ("Cobrança em corrida" / "Cobrança em entrega"), cada uma chamando `dashboard_definir_forma_cobranca` com o `p_motor` certo. Tipos TypeScript (`database.ts`, arquivo normalmente auto-gerado pelo Supabase CLI) atualizados manualmente pros novos campos/assinaturas — **recomendo rodar `supabase gen types` de verdade depois**, pra não divergir do banco real com o tempo. Push feito numa branch separada (`claude/comissao-por-motor`), PR não aberto.
+
+**Validado com testes seguros (`BEGIN`/`ROLLBACK`):**
+- Motorista com `forma_cobranca_motorista_corrida='fixa'` E `forma_cobranca_motorista_entrega='comissionada'` simultaneamente → `calcular_valor_liquido_profissional` retornou R$21,73 (100%, fixa) pra corrida e R$17,38 (80%, comissionada) pra entrega da MESMA solicitação de R$21,73 — confirma que os dois modos funcionam de forma totalmente independente.
+- `trocar_forma_cobranca_motorista(..., 'entrega', ...)` alterou só o campo de entrega, registrou no histórico com `motor='entrega'` — corrida não foi tocada.
+
+**Pendências (não verificadas/implementadas ainda):**
+- Não confirmei se algum workflow n8n chama `trocar_forma_cobranca_motorista` ou `dashboard_definir_forma_cobranca` diretamente (não achei chamador nem no SQL, nem no dashboard React, nem no app Flutter) — se existir, precisa ser atualizado pra passar `p_motor`.
+- O app Flutter não parece usar essas funções de troca hoje (só lê `forma_cobranca_motorista` indiretamente via as RPCs já corrigidas de exibição) — não mexido, nada a fazer lá por enquanto.
+- Os campos antigos (`forma_cobranca_motorista`, `forma_cobranca_motorista_data_adesao`) foram mantidos intactos (não removidos) por segurança — depois que tudo estiver confirmado funcionando em produção por um tempo, dá pra avaliar remover essas colunas legadas.
+
 ### Ainda não mexido (menor prioridade / fora do escopo SQL)
 - 3 extensions no schema `public` (`pg_net`, `http`, `unaccent`) — mover exige recriar e reapontar todas as referências, mais arriscado.
 - "Leaked password protection" desligado no Auth — é toggle no painel do Supabase, não dá pra mudar por SQL.
