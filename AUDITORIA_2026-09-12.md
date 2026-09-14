@@ -265,6 +265,16 @@ Corrigido em `fechar_comissao_entrega`: passou a também ler `dados_coletados->>
 
 Validado com o mesmo tipo de teste seguro (`BEGIN`/`ROLLBACK`, consultando os saldos ainda dentro da transação antes de desfazer): motorista (saldo R$4,04) fecha entrega R$9 + pedido R$25 em dinheiro → motorista fica com **R$-22,76** (dívida), loja (Galegos, saldo R$0 antes) fica com **R$25,00** creditados (valor cheio do pedido, sem desconto de comissão). Depois do `ROLLBACK`, ambos os saldos voltaram ao estado original — nenhum dado real foi alterado.
 
+### (16) Corrida: oferta mostrava um valor líquido, aceite mostrava outro
+
+Edvaldo mandou print do WhatsApp real dele como motorista: a oferta mostrou "Você recebe: R$20,73" (corrida de R$21,73), mas ao digitar o código e aceitar, a mensagem de confirmação mostrou "Comissão Tio (20%): R$4,35 / Você recebe: R$17,38" — dois valores diferentes pra mesma corrida.
+
+Causa: a regra de comissão FIXA de corrida (R$1 padrão, configurável em `cfg_cidades.comissao_corrida_fixa`, substituindo os antigos 20%) já tinha sido aplicada em `app_oferta_pendente`, `app_corridas_ativas`, `fechar_comissao_entrega` e `calcular_valor_liquido_profissional` (sessões anteriores desta auditoria) — mas **nunca em `aceitar_solicitacao`**, que é a função que gera a mensagem de confirmação real que o motorista recebe no WhatsApp ao aceitar. Essa função ainda calculava a comissão de qualquer motor (corrida ou entrega) como percentual (20%), sem nenhum ramo especial pra corrida.
+
+Corrigido: adicionado ramo `ELSIF v_motor = 'corrida' THEN` em `aceitar_solicitacao`, replicando a mesma lógica de comissão fixa já usada nas outras 4 funções (lê `cfg_cidades.comissao_corrida_fixa`, default R$1,00, nunca desconta mais que o valor da corrida).
+
+Validado com teste seguro (`BEGIN`/`ROLLBACK`): corrida de R$21,73 → mensagem de aceite agora mostra "Comissão Tio (fixa): R$1,00 / Você recebe: R$20,73" — bate exatamente com o que a oferta já mostrava.
+
 ### Ainda não mexido (menor prioridade / fora do escopo SQL)
 - 3 extensions no schema `public` (`pg_net`, `http`, `unaccent`) — mover exige recriar e reapontar todas as referências, mais arriscado.
 - "Leaked password protection" desligado no Auth — é toggle no painel do Supabase, não dá pra mudar por SQL.
