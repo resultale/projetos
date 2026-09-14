@@ -330,6 +330,18 @@ Corrigido nos dois workflows: o node agora passa `motor` (`$fromAI('motor')`) co
 - O app Flutter não parece usar essas funções de troca hoje (só lê `forma_cobranca_motorista` indiretamente via as RPCs já corrigidas de exibição) — não mexido, nada a fazer lá por enquanto.
 - Os campos antigos (`forma_cobranca_motorista`, `forma_cobranca_motorista_data_adesao`) foram mantidos intactos (não removidos) por segurança — depois que tudo estiver confirmado funcionando em produção por um tempo, dá pra avaliar remover essas colunas legadas.
 
+### (19) Mapa ao vivo mostrava cidade errada (campo texto desatualizado)
+
+Edvaldo reportou pelo print do dashboard: Diih Leite aparecia no "Mapa ao vivo" como sendo de São Carlos, mesmo com o pin dela em Lençóis Paulista.
+
+Causa: `usuarios` tem 2 campos de cidade — `cidade_id` (a fonte de verdade real, usada por praticamente todas as RPCs de negócio do sistema) e `cidade` (texto solto, desnormalizado, só usado em telas de exibição como esse mapa). Não existia nenhum trigger sincronizando os dois — então quando `cidade_id` da Diih foi atualizado pra Lençóis Paulista em algum momento, o texto solto `cidade` ficou parado em "São Carlos" (valor do cadastro original). Achado 1 caso divergente entre os motoristas/entregadores existentes (Diih).
+
+Corrigido:
+- Dado da Diih (e qualquer outro que estivesse divergente) sincronizado: `UPDATE usuarios SET cidade = cidades.cidade` via `cidade_id`.
+- Criado um trigger (`trg_sincronizar_cidade_texto_usuario`, `BEFORE INSERT OR UPDATE OF cidade_id`) que mantém o campo texto sempre sincronizado com `cidade_id` automaticamente daqui pra frente — resolve a causa raiz, não só o sintoma; nenhuma RPC precisa lembrar de atualizar os dois campos manualmente.
+
+Testado com segurança (`BEGIN`/`ROLLBACK`): mudei `cidade_id` da Diih pra outra cidade de teste dentro da transação, confirmei que o trigger atualizou o texto automaticamente, depois desfiz. Confirmado fora da transação que o dado real dela agora está correto (`cidade='Lençóis Paulista'`).
+
 ### Ainda não mexido (menor prioridade / fora do escopo SQL)
 - 3 extensions no schema `public` (`pg_net`, `http`, `unaccent`) — mover exige recriar e reapontar todas as referências, mais arriscado.
 - "Leaked password protection" desligado no Auth — é toggle no painel do Supabase, não dá pra mudar por SQL.
