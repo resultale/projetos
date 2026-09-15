@@ -375,6 +375,30 @@ Implementado ponta a ponta:
 
 **Dado real de produção observado durante a investigação** (não alterado por mim, só consultado): a Fiorino da Diih já estava com `ativo=true` no banco — ela deve ter conseguido trocar de moto pra carro com sucesso depois da correção da seção 21 (confirma que aquela correção já está funcionando em produção).
 
+### (23) Maestro disparando o motor 2x pra uma única mensagem — mensagens duplicadas/contraditórias no WhatsApp
+
+Edvaldo reportou "muito erro no n8n" e mensagens duplicadas. Investiguei as execuções reais mais recentes do Maestro (`PnKTGCqQC51u8NMV`).
+
+**Achado real e confirmado** (execução `97641`, telefone `5514996473659`, mensagem "Tio manda uma moto aqui em casa vou ali na montreal pagar em dinheiro"): o Maestro executou o `WF_CORRIDA` **duas vezes** pra essa única mensagem (sub-execuções `97642` e `97643`), mandando **duas respostas contraditórias** pro cliente:
+- "Puts, entendi! Sua corrida já tá aguardando um motorista..."
+- "Isso aqui é sobre corrida! Pra pedir uma moto, me manda de novo contando os detalhes..."
+
+Causa raiz: o nó `rpc_resolver_tag` tinha **4 conexões de entrada diretas** (o caminho normal via LLM, `Detectar_Suporte_Humano`, e 3 atalhos determinísticos: `Forcar_Tipo_Corrida_Localizacao`, `Forcar_Tipo_Corrida_Deterministico`, `Forcar_Tipo_Entrega_Estabelecimento_Deterministico`). Esses caminhos deveriam ser alternativos/exclusivos, mas não eram — quando uma mensagem batia em mais de um caminho ao mesmo tempo (esse caso bateu no LLM E no atalho determinístico de corrida), o n8n disparava `rpc_resolver_tag` → `Executar_Workflow_Motor_Especifico` uma vez por caminho que casou, gerando execuções duplicadas do motor com respostas diferentes. Isso também explica por que o cliente reenviou a mesma mensagem 3x (ficou confuso com as respostas contraditórias, sem contar que cada rodada demorava ~9-20s pra chegar).
+
+Conferido no banco: nenhuma corrida duplicada chegou a ser criada (o dano ficou restrito às mensagens confusas — o `conversation_state` ficou em estado intermediário de coleta, sem solicitação nova criada).
+
+**Corrigido**: adicionado um nó Merge (modo append, 4 entradas) recebendo os 4 caminhos que antes iam direto pro `rpc_resolver_tag`, seguido de um nó Limit (mantém só o 1º item) antes do `rpc_resolver_tag` — garantindo que ele dispare no máximo 1x por mensagem, mesmo que mais de um caminho de roteamento case. Publicado.
+
+**Ainda não confirmado ponta a ponta** (regra do processo de debug: não considerar resolvido sem reproduzir o cenário exato) — a mudança é estrutural e de baixo risco (só consolida entradas que já existiam, não muda a lógica de cada caminho), mas o teste real só vai acontecer com a próxima mensagem real que bata em 2+ caminhos de roteamento ao mesmo tempo. Se aparecer duplicação de novo, checar primeiro se o nó Merge está esperando por uma entrada que nunca dispara nessa mensagem (o que travaria o fluxo em vez de duplicar) — nesse caso o ajuste seria trocar o modo do Merge ou usar "chooseBranchMode".
+
+### (24) Erro diário no WF_TIMEOUT_PIX_ESTORNO — credencial inválida
+
+Achado durante a mesma investigação: todo dia às 04:00, o workflow `WF_TIMEOUT_PIX_ESTORNO` (estorna PIX de solicitação que deu timeout sem motorista) falhava com "Node uses invalid credential" no nó `Executar_RPC_Estorno`. Causa: um parâmetro fantasma (`parameters.credentials.postgresConfig`, formato antigo de referência a credencial, provavelmente resquício de migração de versão do n8n) dentro do node, além da credencial correta já configurada normalmente (`node.credentials.postgres`) — a duplicidade contundia a checagem de permissão do n8n especificamente em execuções via *schedule trigger*.
+
+O nó `Buscar_Config_Evolution` do mesmo workflow tinha o mesmo parâmetro fantasma, mas apontando pra credencial errada (`7gToBFWHJjnDuCIg`, quando a credencial de fato usada nesse nó era `fqY4X6k1Qqx5zFwO`/"Postgres account") — corrigido também, redirecionado pra usar `Postgres_tio_v2` (a credencial padrão do projeto) por consistência.
+
+Corrigido: removido o parâmetro fantasma dos dois nós, credencial do `Buscar_Config_Evolution` alinhada. Publicado. Baixo impacto (só afeta o estorno automático de PIX perdido, que é pouco frequente), mas a falha diária consumia execuções de erro no histórico e mascarava a leitura de outros erros reais.
+
 ### Ainda não mexido (menor prioridade / fora do escopo SQL)
 - 3 extensions no schema `public` (`pg_net`, `http`, `unaccent`) — mover exige recriar e reapontar todas as referências, mais arriscado.
 - "Leaked password protection" desligado no Auth — é toggle no painel do Supabase, não dá pra mudar por SQL.
